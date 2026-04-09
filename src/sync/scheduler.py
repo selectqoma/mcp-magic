@@ -5,6 +5,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.config import settings
+from src.services.notifications import run_notification_matching
 from src.sync.grants import sync_grants_opportunities
 from src.sync.sam import sync_sam_opportunities
 from src.sync.sbir import sync_sbir_opportunities
@@ -47,6 +48,12 @@ def create_scheduler() -> AsyncIOScheduler:
         lambda: asyncio.create_task(run_sync("USASpending", sync_usaspending_awards)),
         trigger=IntervalTrigger(seconds=settings.usaspending_sync_interval),
         id="usaspending_sync",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        lambda: asyncio.create_task(run_sync("Notifications", run_notification_matching)),
+        trigger=IntervalTrigger(seconds=settings.sam_sync_interval),  # run after each SAM sync
+        id="notification_matching",
         replace_existing=True,
     )
 
