@@ -1,0 +1,70 @@
+name: mcp-magic-govcon
+displayName: "MCP Magic — Federal Contract Intelligence"
+description: >
+  Search 75,000+ US federal contract and grant opportunities from SAM.gov,
+  Grants.gov, and SBIR.gov. Parse solicitation PDFs, score opportunities against
+  your company profile, and track competitor award history via USASpending.gov.
+version: "1.0.0"
+license: "Proprietary"
+homepage: "https://mcpmagic.io"
+repository: "https://github.com/selectqoma/mcp-magic"
+author: "MCP Magic"
+
+transport: sse
+url: "https://api.mcpmagic.io/sse"
+
+categories:
+  - business
+  - government
+  - search
+  - data
+
+tags:
+  - government-contracts
+  - SAM.gov
+  - federal-procurement
+  - grants
+  - SBIR
+  - GovCon
+
+tools:
+  - name: search_opportunities_tool
+    description: "Semantic + filtered search across SAM.gov, Grants.gov, SBIR. Free tier: 20/day."
+  - name: get_opportunity_details
+    description: "Full opportunity details including description, contacts, and attachments."
+  - name: get_solicitation_requirements
+    description: "Parse solicitation PDFs — requirements, eval criteria, deadlines. Pro tier."
+  - name: match_to_profile
+    description: "Score opportunities against your company capabilities/certs. Pro tier."
+  - name: track_competitors
+    description: "Federal award history for any company via USASpending. Pro tier."
+  - name: search_past_awards
+    description: "Market intelligence — who wins what federal contracts and where."
+  - name: get_notifications
+    description: "New opportunity matches for your saved company profile. Pro tier."
+
+pricing:
+  - tier: Free
+    price: "$0/mo"
+    features: ["20 searches/day", "14-day Pro trial"]
+  - tier: Pro
+    price: "$49/mo"
+    features: ["Unlimited searches", "PDF parsing", "Profile matching", "Competitor intel"]
+  - tier: Agency
+    price: "$199/mo"
+    features: ["Everything in Pro", "20 profiles", "Webhook alerts"]
+
+config:
+  mcp_client_snippet: |
+    {
+      "mcpServers": {
+        "mcp-magic": {
+          "command": "npx",
+          "args": ["-y", "mcp-remote", "https://api.mcpmagic.io/sse"],
+          "env": {
+            "MCP_API_KEY": "<your-api-key>"
+          }
+        }
+      }
+    }
+  get_api_key: "https://mcpmagic.io"
