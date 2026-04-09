@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MCP Magic — Federal Contract Intelligence for AI Agents</title>
+  <meta name="description" content="Search 75,000+ US federal contract opportunities from SAM.gov, Grants.gov, and SBIR.gov — directly from Claude, Cursor, or any AI agent." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --accent: #6366f1;
+      --accent-dim: #4f46e5;
+      --text: #e2e2f0;
+      --muted: #8b8ba7;
+      --green: #22c55e;
+      --radius: 10px;
+      --mono: 'SF Mono', 'Fira Code', monospace;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; line-height: 1.6; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Nav */
+    nav { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 2rem; border-bottom: 1px solid var(--border); }
+    .logo { font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em; }
+    .logo span { color: var(--accent); }
+    nav .cta-sm { background: var(--accent); color: #fff; padding: .45rem 1.1rem; border-radius: 6px; font-size: .875rem; font-weight: 600; }
+    nav .cta-sm:hover { background: var(--accent-dim); text-decoration: none; }
+
+    /* Hero */
+    .hero { text-align: center; padding: 5rem 1.5rem 3rem; max-width: 720px; margin: 0 auto; }
+    .badge { display: inline-block; background: rgba(99,102,241,.15); color: var(--accent); border: 1px solid rgba(99,102,241,.3); border-radius: 999px; padding: .25rem .85rem; font-size: .8rem; font-weight: 600; margin-bottom: 1.5rem; letter-spacing: .04em; }
+    h1 { font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 800; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 1.25rem; }
+    h1 em { font-style: normal; color: var(--accent); }
+    .subtitle { font-size: 1.1rem; color: var(--muted); max-width: 540px; margin: 0 auto 2.5rem; }
+    .hero-actions { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+    .btn-primary { background: var(--accent); color: #fff; padding: .75rem 2rem; border-radius: var(--radius); font-weight: 700; font-size: 1rem; cursor: pointer; border: none; }
+    .btn-primary:hover { background: var(--accent-dim); text-decoration: none; }
+    .btn-secondary { background: transparent; color: var(--text); padding: .75rem 2rem; border-radius: var(--radius); font-weight: 600; font-size: 1rem; border: 1px solid var(--border); cursor: pointer; }
+    .btn-secondary:hover { border-color: var(--accent); text-decoration: none; }
+
+    /* Code block demo */
+    .demo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; max-width: 680px; margin: 3rem auto; text-align: left; font-family: var(--mono); font-size: .82rem; line-height: 1.7; overflow-x: auto; }
+    .demo .comment { color: var(--muted); }
+    .demo .prompt { color: var(--accent); }
+    .demo .result { color: var(--green); }
+
+    /* Stats */
+    .stats { display: flex; justify-content: center; gap: 3rem; padding: 2rem 1.5rem; flex-wrap: wrap; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .stat-num { font-size: 2rem; font-weight: 800; color: var(--accent); }
+    .stat-label { color: var(--muted); font-size: .85rem; margin-top: .15rem; }
+
+    /* Features */
+    section { max-width: 1000px; margin: 0 auto; padding: 4rem 1.5rem; }
+    .section-label { text-align: center; color: var(--accent); font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: .75rem; }
+    h2 { text-align: center; font-size: clamp(1.5rem, 3vw, 2.25rem); font-weight: 800; letter-spacing: -.02em; margin-bottom: 2.5rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 1.25rem; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; }
+    .card-icon { font-size: 1.5rem; margin-bottom: .75rem; }
+    .card h3 { font-size: 1rem; font-weight: 700; margin-bottom: .4rem; }
+    .card p { color: var(--muted); font-size: .9rem; }
+
+    /* Tools table */
+    .tools-table { width: 100%; border-collapse: collapse; }
+    .tools-table th { text-align: left; padding: .75rem 1rem; color: var(--muted); font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border); }
+    .tools-table td { padding: .85rem 1rem; border-bottom: 1px solid var(--border); font-size: .9rem; }
+    .tools-table tr:last-child td { border-bottom: none; }
+    .tag { display: inline-block; padding: .15rem .55rem; border-radius: 4px; font-size: .75rem; font-weight: 600; }
+    .tag-free { background: rgba(34,197,94,.12); color: var(--green); }
+    .tag-pro { background: rgba(99,102,241,.15); color: var(--accent); }
+    code { font-family: var(--mono); background: rgba(255,255,255,.06); padding: .1rem .4rem; border-radius: 4px; font-size: .85em; }
+
+    /* Pricing */
+    .grid-pricing { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; max-width: 820px; margin: 0 auto; }
+    .pricing-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; }
+    .pricing-card.featured { border-color: var(--accent); }
+    .pricing-card .plan { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: .5rem; }
+    .pricing-card.featured .plan { color: var(--accent); }
+    .price { font-size: 2.5rem; font-weight: 800; letter-spacing: -.04em; margin-bottom: .25rem; }
+    .price sub { font-size: 1rem; font-weight: 400; color: var(--muted); vertical-align: bottom; }
+    .price-note { color: var(--muted); font-size: .85rem; margin-bottom: 1.5rem; }
+    .features-list { list-style: none; }
+    .features-list li { padding: .35rem 0; font-size: .9rem; color: var(--muted); }
+    .features-list li::before { content: "✓ "; color: var(--green); font-weight: 700; }
+    .features-list li.dim::before { content: "— "; color: var(--border); }
+    .features-list li.dim { color: var(--border); }
+    .pricing-btn { display: block; text-align: center; margin-top: 1.5rem; padding: .7rem; border-radius: 8px; font-weight: 700; font-size: .95rem; }
+    .pricing-btn-outline { border: 1px solid var(--border); color: var(--text); }
+    .pricing-btn-outline:hover { border-color: var(--accent); text-decoration: none; }
+    .pricing-btn-fill { background: var(--accent); color: #fff; }
+    .pricing-btn-fill:hover { background: var(--accent-dim); text-decoration: none; }
+
+    /* CTA bottom */
+    .cta-section { text-align: center; padding: 5rem 1.5rem; border-top: 1px solid var(--border); }
+    .cta-section h2 { margin-bottom: 1rem; }
+    .cta-section p { color: var(--muted); max-width: 480px; margin: 0 auto 2rem; }
+
+    /* Setup modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; max-width: 540px; width: 90%; position: relative; }
+    .modal h3 { font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; }
+    .modal input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: .7rem 1rem; border-radius: 8px; font-size: .95rem; margin-bottom: 1rem; }
+    .modal input:focus { outline: none; border-color: var(--accent); }
+    .modal .submit { width: 100%; background: var(--accent); color: #fff; border: none; padding: .75rem; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; }
+    .modal .submit:hover { background: var(--accent-dim); }
+    .modal .close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--muted); font-size: 1.25rem; cursor: pointer; }
+    .result-box { display: none; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: var(--mono); font-size: .8rem; white-space: pre-wrap; word-break: break-all; margin-top: 1rem; }
+
+    footer { text-align: center; padding: 2rem; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">MCP<span>Magic</span></div>
+  <a href="#" class="cta-sm" onclick="openModal()">Get Free API Key</a>
+</nav>
+
+<div class="hero">
+  <div class="badge">🇺🇸 75,000+ Active Federal Opportunities</div>
+  <h1>Your AI agent finds <em>federal contracts</em> in seconds</h1>
+  <p class="subtitle">Search SAM.gov, Grants.gov, and SBIR.gov — with semantic search, competitor intelligence, and PDF requirement parsing — directly from Claude, Cursor, or any MCP client.</p>
+  <div class="hero-actions">
+    <a href="#" class="btn-primary" onclick="openModal()">Get Free API Key</a>
+    <a href="#tools" class="btn-secondary">See All Tools</a>
+  </div>
+</div>
+
+<div class="demo">
+  <span class="comment"># Ask Claude in any MCP-enabled client:</span><br><br>
+  <span class="prompt">You:</span> Find active cybersecurity contracts at DoD, set aside for SDVOSB, above $500K, deadline in 30 days<br><br>
+  <span class="prompt">Claude:</span> Found 8 opportunities matching your criteria:<br>
+  <span class="result">
+  1. Cybersecurity Operations Support — DISA — $750K-$2M — Due Apr 28
+  2. Zero Trust Architecture Implementation — US Army — $1.2M — Due May 3
+  3. SOC-as-a-Service, SDVOSB Set-Aside — USAF — $500K-$900K — Due Apr 30
+  ...</span><br><br>
+  <span class="prompt">You:</span> Parse the requirements for #1 and score my company against it<br>
+  <span class="result">Requirements parsed: 48 technical requirements, 3 evaluation criteria, TS/SCI clearance required...
+  Match score: 0.82 — strong keyword match, exact NAICS, eligible for SDVOSB set-aside</span>
+</div>
+
+<div class="stats">
+  <div><div class="stat-num">75,000+</div><div class="stat-label">Active opportunities</div></div>
+  <div><div class="stat-num">15 min</div><div class="stat-label">Sync cadence</div></div>
+  <div><div class="stat-num">4</div><div class="stat-label">Data sources</div></div>
+  <div><div class="stat-num">7</div><div class="stat-label">MCP tools</div></div>
+</div>
+
+<section>
+  <div class="section-label">Why MCP Magic</div>
+  <h2>Not just a search box</h2>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-icon">🔍</div>
+      <h3>Semantic search across all sources</h3>
+      <p>Describe what you're looking for in plain English. We search SAM.gov, Grants.gov, and SBIR simultaneously with vector + SQL hybrid search.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📄</div>
+      <h3>PDF requirement extraction</h3>
+      <p>We download and parse solicitation PDFs. Ask "what are the evaluation criteria?" and get a structured answer — no 200-page reading required.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎯</div>
+      <h3>Profile matching with scoring</h3>
+      <p>Tell us your capabilities, NAICS codes, and certifications. Get scored matches ranked by keyword overlap, NAICS fit, set-aside eligibility, and semantic similarity.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🕵️</div>
+      <h3>Competitor award intelligence</h3>
+      <p>Look up any company's federal contract history via USASpending. See who wins at which agencies, with what NAICS codes, and for how much.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔔</div>
+      <h3>Auto-matched notifications</h3>
+      <p>Save your company profile once. Get notified whenever new opportunities matching your profile appear — every 15 minutes, without polling.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <h3>Works in any MCP client</h3>
+      <p>One JSON config block. Works with Claude Desktop, Cursor, Cline, Windsurf, and any other MCP-compatible AI client.</p>
+    </div>
+  </div>
+</section>
+
+<section id="tools">
+  <div class="section-label">Tools Reference</div>
+  <h2>7 tools, zero setup</h2>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+    <table class="tools-table">
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>What it does</th>
+          <th>Tier</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>search_opportunities</code></td><td>Semantic + filtered search across SAM, Grants, SBIR</td><td><span class="tag tag-free">Free</span></td></tr>
+        <tr><td><code>get_opportunity_details</code></td><td>Full description, contacts, attachment list</td><td><span class="tag tag-free">Free</span></td></tr>
+        <tr><td><code>get_solicitation_requirements</code></td><td>Parse PDF — requirements, eval criteria, deadlines</td><td><span class="tag tag-pro">Pro</span></td></tr>
+        <tr><td><code>match_to_profile</code></td><td>Score opportunities against your capabilities</td><td><span class="tag tag-pro">Pro</span></td></tr>
+        <tr><td><code>track_competitors</code></td><td>Company award history from USASpending</td><td><span class="tag tag-pro">Pro</span></td></tr>
+        <tr><td><code>search_past_awards</code></td><td>Market intelligence — who wins what, where</td><td><span class="tag tag-pro">Pro</span></td></tr>
+        <tr><td><code>get_notifications</code></td><td>New matches for your saved profile</td><td><span class="tag tag-pro">Pro</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="pricing" style="padding-top:0;">
+  <div class="section-label">Pricing</div>
+  <h2>Start free, upgrade when you win</h2>
+  <div class="grid-pricing">
+    <div class="pricing-card">
+      <div class="plan">Free</div>
+      <div class="price">$0<sub>/mo</sub></div>
+      <div class="price-note">14-day Pro trial included</div>
+      <ul class="features-list">
+        <li>20 searches/day</li>
+        <li>get_opportunity_details</li>
+        <li class="dim">PDF parsing</li>
+        <li class="dim">Profile matching</li>
+        <li class="dim">Competitor intelligence</li>
+        <li class="dim">Notifications</li>
+      </ul>
+      <a href="#" class="pricing-btn pricing-btn-outline" onclick="openModal()">Get Started</a>
+    </div>
+    <div class="pricing-card featured">
+      <div class="plan">Pro</div>
+      <div class="price">$49<sub>/mo</sub></div>
+      <div class="price-note">Everything in Free, plus:</div>
+      <ul class="features-list">
+        <li>Unlimited searches</li>
+        <li>PDF requirement parsing</li>
+        <li>Profile matching + scoring</li>
+        <li>Competitor intelligence</li>
+        <li>3 saved company profiles</li>
+        <li>Auto-matched notifications</li>
+      </ul>
+      <a href="#" class="pricing-btn pricing-btn-fill" onclick="openModal()">Start Free Trial</a>
+    </div>
+    <div class="pricing-card">
+      <div class="plan">Agency</div>
+      <div class="price">$199<sub>/mo</sub></div>
+      <div class="price-note">Everything in Pro, plus:</div>
+      <ul class="features-list">
+        <li>20 saved company profiles</li>
+        <li>Webhook alerts</li>
+        <li>Priority support</li>
+        <li class="dim">&nbsp;</li>
+        <li class="dim">&nbsp;</li>
+        <li class="dim">&nbsp;</li>
+      </ul>
+      <a href="#" class="pricing-btn pricing-btn-outline" onclick="openModal()">Get Started</a>
+    </div>
+  </div>
+</section>
+
+<div class="cta-section">
+  <h2>Ready to stop missing contracts?</h2>
+  <p>Get your free API key in 30 seconds. Add one JSON block to your Claude Desktop config. Start searching.</p>
+  <a href="#" class="btn-primary" onclick="openModal()">Get Free API Key</a>
+</div>
+
+<footer>
+  © 2026 MCP Magic · <a href="mailto:hello@mcpmagic.io">hello@mcpmagic.io</a>
+</footer>
+
+<!-- Registration modal -->
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal">
+    <button class="close" onclick="document.getElementById('modal').classList.remove('open')">✕</button>
+    <h3>Get your free API key</h3>
+    <p style="color:var(--muted);font-size:.9rem;margin-bottom:1.25rem;">Free tier includes 20 searches/day + 14-day Pro trial. No credit card.</p>
+    <input type="email" id="email-input" placeholder="you@company.com" />
+    <button class="submit" onclick="register()">Get API Key →</button>
+    <div class="result-box" id="result-box"></div>
+  </div>
+</div>
+
+<script>
+function openModal() { document.getElementById('modal').classList.add('open'); }
+function closeModal(e) { if (e.target.id === 'modal') document.getElementById('modal').classList.remove('open'); }
+
+async function register() {
+  const email = document.getElementById('email-input').value.trim();
+  if (!email) return;
+  const btn = document.querySelector('.modal .submit');
+  btn.textContent = 'Creating account...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    const box = document.getElementById('result-box');
+    box.style.display = 'block';
+    if (data.api_key) {
+      box.innerHTML = `✓ Your API key:\n\n${data.api_key}\n\nAdd to Claude Desktop config:\n\n${JSON.stringify(data.mcp_config, null, 2)}`;
+    } else {
+      box.innerHTML = `Error: ${data.detail || 'Something went wrong'}`;
+    }
+  } catch (e) {
+    document.getElementById('result-box').style.display = 'block';
+    document.getElementById('result-box').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.textContent = 'Get API Key →';
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

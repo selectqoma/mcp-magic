@@ -19,7 +19,7 @@ services:
 
   server:
     build: .
-    command: python -m fastmcp run src/server.py --transport sse --port 8000
+    command: python main.py
     ports:
       - "8000:8000"
     env_file: .env
