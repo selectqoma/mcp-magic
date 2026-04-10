@@ -12,6 +12,7 @@ from pydantic import BaseModel, EmailStr
 from src.auth import create_user
 from src.billing import handle_paddle_webhook, verify_paddle_webhook
 from src.db import AsyncSessionLocal
+from src.email import send_resend_api_key, send_welcome
 from src.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,9 @@ async def register(req: RegisterRequest, request: Request):
 
         user = await create_user(req.email, session)
 
+    trial_str = user.trial_ends_at.strftime("%B %d, %Y") if user.trial_ends_at else None
+    await send_welcome(user.email, user.api_key, trial_str)
+
     return {
         "api_key": user.api_key,
         "tier": user.tier,
@@ -83,6 +87,31 @@ async def register(req: RegisterRequest, request: Request):
             }
         },
     }
+
+
+# ── Resend API key ─────────────────────────────────────────────────────────────
+
+class ResendKeyRequest(BaseModel):
+    email: EmailStr
+
+
+@app.post("/resend-key")
+async def resend_key(req: ResendKeyRequest, request: Request):
+    """Re-deliver the API key for an existing account to the registered email."""
+    ip = request.client.host if request.client else "unknown"
+    if not _check_register_rate_limit(ip):
+        raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+
+    async with AsyncSessionLocal() as session:
+        from sqlalchemy import select
+        result = await session.execute(select(User).where(User.email == req.email))
+        user = result.scalar_one_or_none()
+
+    # Always return 200 to avoid email enumeration
+    if user:
+        await send_resend_api_key(user.email, user.api_key)
+
+    return {"message": "If an account exists for that email, your API key has been sent."}
 
 
 # ── Paddle webhook ─────────────────────────────────────────────────────────────

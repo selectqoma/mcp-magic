@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     paddle_api_key: str = ""
     paddle_webhook_secret: str = ""
 
+    # Email (Resend)
+    resend_api_key: str = ""
+
     # App
     secret_key: str = "change-me-in-production"
     debug: bool = False

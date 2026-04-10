@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
+from src.email import send_payment_failed, send_payment_receipt
 from src.models.user import User, UserTier
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,8 @@ async def _on_subscription_created(data: dict, session: AsyncSession) -> None:
     user.trial_ends_at = None  # end trial on paid subscription
     await session.commit()
     logger.info(f"User {user.email} subscribed → {tier}")
+    amount_str = _format_amount(data)
+    await send_payment_receipt(user.email, tier, amount_str, data.get("id", ""))
 
 
 async def _on_subscription_updated(data: dict, session: AsyncSession) -> None:
@@ -94,6 +97,8 @@ async def _on_subscription_updated(data: dict, session: AsyncSession) -> None:
     user.tier = tier
     await session.commit()
     logger.info(f"User {user.email} updated → {tier}")
+    amount_str = _format_amount(data)
+    await send_payment_receipt(user.email, tier, amount_str, data.get("id", ""))
 
 
 async def _on_subscription_canceled(data: dict, session: AsyncSession) -> None:
@@ -114,6 +119,7 @@ async def _on_subscription_past_due(data: dict, session: AsyncSession) -> None:
     user.tier = UserTier.FREE
     await session.commit()
     logger.warning(f"User {user.email} past due → downgraded to FREE")
+    await send_payment_failed(user.email, data.get("id", ""))
 
 
 async def _find_user_by_paddle_customer_id(data: dict, session: AsyncSession) -> User | None:
@@ -138,6 +144,20 @@ async def link_paddle_customer(user_id, customer_id: str, session: AsyncSession)
     if user:
         user.paddle_customer_id = customer_id
         await session.commit()
+
+
+def _format_amount(data: dict) -> str:
+    """Extract a human-readable amount string from Paddle subscription data."""
+    try:
+        totals = data.get("recurring_transaction_details", {}).get("totals", {})
+        subtotal = totals.get("subtotal", "")
+        currency = data.get("currency_code", "USD")
+        if subtotal:
+            amount = int(str(subtotal).replace(".", "")) / 100
+            return f"{currency} {amount:.2f}/mo"
+    except (ValueError, TypeError, AttributeError):
+        pass
+    return ""
 
 
 def _tier_from_subscription(data: dict) -> str:
