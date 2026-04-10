@@ -13,6 +13,8 @@ Everything you need to fill in before the server runs. Check off as you go.
 | `ANTHROPIC_API_KEY` | [console.anthropic.com/keys](https://console.anthropic.com/keys) | ☐ |
 | `PADDLE_API_KEY` | [vendors.paddle.com/authentication](https://vendors.paddle.com/authentication) | ☐ (Week 3) |
 | `PADDLE_WEBHOOK_SECRET` | Paddle dashboard → Notifications → Webhooks | ☐ (Week 3) |
+| `PADDLE_PRICE_ID_PRO` | Paddle dashboard → Catalog → Prices → copy the `pri_xxx` ID for Pro | ☐ (Week 3) |
+| `PADDLE_PRICE_ID_AGENCY` | Paddle dashboard → Catalog → Prices → copy the `pri_xxx` ID for Agency | ☐ (Week 3) |
 | `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys) — verify `mcpmagic.io` domain first | ☐ |
 | `SECRET_KEY` | Any long random string (`openssl rand -hex 32`) | ☐ |
 

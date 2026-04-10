@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Billing (Paddle)
     paddle_api_key: str = ""
     paddle_webhook_secret: str = ""
+    # Exact Paddle price IDs — set these from the Paddle dashboard; used to map subscriptions to tiers
+    paddle_price_id_pro: str = ""
+    paddle_price_id_agency: str = ""
 
     # Email (Resend)
     resend_api_key: str = ""

@@ -4,8 +4,9 @@ import json
 import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, EmailStr
 
@@ -19,20 +20,28 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MCP Magic API", docs_url=None, redoc_url=None)
 
-# Simple in-memory rate limiter for /register (IP-based, 5 registrations per hour)
+# In-process rate limiters (IP-keyed, not Redis — single-worker only; see SETUP.md)
 _register_attempts: dict[str, list[datetime]] = defaultdict(list)
+_resend_attempts: dict[str, list[datetime]] = defaultdict(list)
+
 REGISTER_LIMIT = 5
 REGISTER_WINDOW = timedelta(hours=1)
 
+RESEND_KEY_LIMIT = 3
+RESEND_KEY_WINDOW = timedelta(hours=1)
 
-def _check_register_rate_limit(ip: str) -> bool:
+
+def _check_rate_limit(
+    store: dict[str, list[datetime]],
+    key: str,
+    limit: int,
+    window: timedelta,
+) -> bool:
     now = datetime.now(UTC)
-    attempts = _register_attempts[ip]
-    # Prune old attempts
-    _register_attempts[ip] = [t for t in attempts if now - t < REGISTER_WINDOW]
-    if len(_register_attempts[ip]) >= REGISTER_LIMIT:
+    store[key] = [t for t in store[key] if now - t < window]
+    if len(store[key]) >= limit:
         return False
-    _register_attempts[ip].append(now)
+    store[key].append(now)
     return True
 
 
@@ -51,10 +60,10 @@ class RegisterRequest(BaseModel):
 
 
 @app.post("/register")
-async def register(req: RegisterRequest, request: Request):
+async def register(req: RegisterRequest, request: Request, background_tasks: BackgroundTasks):
     """Create a free account and return an API key."""
     ip = request.client.host if request.client else "unknown"
-    if not _check_register_rate_limit(ip):
+    if not _check_rate_limit(_register_attempts, ip, REGISTER_LIMIT, REGISTER_WINDOW):
         raise HTTPException(status_code=429, detail="Too many registration attempts. Try again later.")
 
     async with AsyncSessionLocal() as session:
@@ -67,7 +76,8 @@ async def register(req: RegisterRequest, request: Request):
         user = await create_user(req.email, session)
 
     trial_str = user.trial_ends_at.strftime("%B %d, %Y") if user.trial_ends_at else None
-    await send_welcome(user.email, user.api_key, trial_str)
+    # Fire-and-forget: email delivery failure should not fail the registration
+    background_tasks.add_task(send_welcome, user.email, user.api_key, trial_str)
 
     return {
         "api_key": user.api_key,
@@ -96,10 +106,14 @@ class ResendKeyRequest(BaseModel):
 
 
 @app.post("/resend-key")
-async def resend_key(req: ResendKeyRequest, request: Request):
-    """Re-deliver the API key for an existing account to the registered email."""
+async def resend_key(req: ResendKeyRequest, request: Request, background_tasks: BackgroundTasks):
+    """Re-deliver the API key for an existing account to the registered email.
+
+    Rate-limited separately from /register to prevent shared-IP lockout.
+    Always returns 200 regardless of whether the account exists (anti-enumeration).
+    """
     ip = request.client.host if request.client else "unknown"
-    if not _check_register_rate_limit(ip):
+    if not _check_rate_limit(_resend_attempts, ip, RESEND_KEY_LIMIT, RESEND_KEY_WINDOW):
         raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
 
     async with AsyncSessionLocal() as session:
@@ -107,9 +121,9 @@ async def resend_key(req: ResendKeyRequest, request: Request):
         result = await session.execute(select(User).where(User.email == req.email))
         user = result.scalar_one_or_none()
 
-    # Always return 200 to avoid email enumeration
+    # Fire-and-forget in background — constant response time regardless of email existence
     if user:
-        await send_resend_api_key(user.email, user.api_key)
+        background_tasks.add_task(send_resend_api_key, user.email, user.api_key)
 
     return {"message": "If an account exists for that email, your API key has been sent."}
 
@@ -142,10 +156,12 @@ async def paddle_webhook(request: Request):
 
 # ── Static landing page ────────────────────────────────────────────────────────
 
+_LANDING_PATH = Path(__file__).parent.parent / "landing" / "index.html"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def landing():
     try:
-        with open("landing/index.html") as f:
-            return HTMLResponse(f.read())
+        return HTMLResponse(_LANDING_PATH.read_text())
     except FileNotFoundError:
         return HTMLResponse("<h1>MCP Magic</h1><p>Coming soon.</p>")

@@ -59,7 +59,29 @@ def verify_paddle_webhook(payload: bytes, signature_header: str) -> bool:
 
 
 async def handle_paddle_webhook(event_type: str, data: dict, session: AsyncSession) -> None:
-    """Route Paddle webhook events to the appropriate handler."""
+    """Route Paddle webhook events to the appropriate handler.
+
+    Uses event_id for idempotency — duplicate deliveries from Paddle are silently ignored.
+    """
+    from sqlalchemy import text as sa_text
+
+    event_id = data.get("id", "")
+    if event_id:
+        # Insert event_id; if it already exists (duplicate), skip processing
+        try:
+            await session.execute(
+                sa_text(
+                    "INSERT INTO paddle_webhook_events (event_id, event_type) VALUES (:eid, :etype)"
+                ),
+                {"eid": event_id, "etype": event_type},
+            )
+            await session.commit()
+        except Exception:
+            # Unique violation → already processed
+            await session.rollback()
+            logger.info(f"Duplicate Paddle event ignored: {event_id}")
+            return
+
     handlers = {
         "subscription.created": _on_subscription_created,
         "subscription.updated": _on_subscription_updated,
@@ -147,39 +169,47 @@ async def link_paddle_customer(user_id, customer_id: str, session: AsyncSession)
 
 
 def _format_amount(data: dict) -> str:
-    """Extract a human-readable amount string from Paddle subscription data."""
+    """Extract a human-readable amount string from Paddle subscription data.
+    Paddle v2 returns unit_price.amount as an integer string in minor units (e.g. "4900" = $49.00).
+    """
     try:
-        totals = data.get("recurring_transaction_details", {}).get("totals", {})
-        subtotal = totals.get("subtotal", "")
-        currency = data.get("currency_code", "USD")
-        if subtotal:
-            amount = int(str(subtotal).replace(".", "")) / 100
-            return f"{currency} {amount:.2f}/mo"
-    except (ValueError, TypeError, AttributeError):
+        items = data.get("items", [])
+        if items:
+            unit_price = items[0].get("price", {}).get("unit_price", {})
+            amount_str = unit_price.get("amount", "")
+            currency = unit_price.get("currency_code", data.get("currency_code", "USD"))
+            if amount_str:
+                amount = int(amount_str) / 100
+                return f"{currency} {amount:.2f}/mo"
+    except (ValueError, TypeError, AttributeError, IndexError):
         pass
     return ""
 
 
 def _tier_from_subscription(data: dict) -> str:
-    """Infer tier from Paddle subscription data. Defaults to FREE on ambiguity."""
+    """Map Paddle subscription to a tier using exact price IDs from config.
+
+    Falls back to substring matching ONLY if price IDs are not configured.
+    Defaults to FREE on any ambiguity — never accidentally grants PRO/AGENCY.
+    """
     items = data.get("items", [])
     for item in items:
         price = item.get("price", {}) if isinstance(item.get("price"), dict) else {}
-        price_id = price.get("id", "").lower()
-        price_name = price.get("name", "").lower()
-        if "agency" in price_id or "agency" in price_name:
+        price_id = price.get("id", "")
+
+        # Primary path: exact price ID match (configure in settings)
+        if settings.paddle_price_id_agency and price_id == settings.paddle_price_id_agency:
             return UserTier.AGENCY
-        if "pro" in price_id or "pro" in price_name:
+        if settings.paddle_price_id_pro and price_id == settings.paddle_price_id_pro:
             return UserTier.PRO
-    # Fallback by amount — but default FREE not PRO on ambiguity
-    try:
-        total = data.get("recurring_transaction_details", {}).get("totals", {}).get("subtotal", "0")
-        amount = int(str(total).replace(".", ""))
-        if amount >= 19900:
-            return UserTier.AGENCY
-        if amount >= 4900:
-            return UserTier.PRO
-    except (ValueError, TypeError, AttributeError):
-        pass
+
+        # Fallback: name substring match (only when price IDs not configured)
+        if not settings.paddle_price_id_agency and not settings.paddle_price_id_pro:
+            price_name = price.get("name", "").lower()
+            if "agency" in price_name:
+                return UserTier.AGENCY
+            if price_name == "pro":  # exact match only, not "promotional"
+                return UserTier.PRO
+
     logger.warning(f"Could not determine tier from subscription {data.get('id')} — defaulting FREE")
     return UserTier.FREE

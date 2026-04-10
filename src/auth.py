@@ -45,30 +45,39 @@ async def check_search_limit(user: User, session: AsyncSession) -> tuple[bool, s
 
     daily_limit = limits["searches_per_day"]
 
-    # Reset counter if new day — atomic update
-    reset_result = await session.execute(
-        update(User)
-        .where(
-            User.id == user.id,
-            text("DATE(searches_reset_at AT TIME ZONE 'UTC') < CURRENT_DATE"),
-        )
-        .values(searches_today=0, searches_reset_at=now)
-        .returning(User.searches_today)
-    )
-    await session.commit()
-
-    # Atomic increment — only succeeds if under limit
+    # Single atomic UPDATE: reset on new day OR increment if under limit.
+    # Uses a CASE expression so there is no window between reset and increment.
     result = await session.execute(
-        update(User)
-        .where(User.id == user.id, User.searches_today < daily_limit)
-        .values(searches_today=User.searches_today + 1)
-        .returning(User.searches_today)
+        text("""
+            UPDATE users
+            SET
+                searches_today = CASE
+                    WHEN searches_reset_at IS NULL OR DATE(searches_reset_at AT TIME ZONE 'UTC') < CURRENT_DATE
+                    THEN 1
+                    WHEN searches_today < :limit
+                    THEN searches_today + 1
+                    ELSE searches_today
+                END,
+                searches_reset_at = CASE
+                    WHEN searches_reset_at IS NULL OR DATE(searches_reset_at AT TIME ZONE 'UTC') < CURRENT_DATE
+                    THEN :now
+                    ELSE searches_reset_at
+                END
+            WHERE id = :uid
+              AND (
+                    searches_reset_at IS NULL
+                    OR DATE(searches_reset_at AT TIME ZONE 'UTC') < CURRENT_DATE
+                    OR searches_today < :limit
+              )
+            RETURNING searches_today, searches_reset_at
+        """),
+        {"uid": str(user.id), "limit": daily_limit, "now": now},
     )
     await session.commit()
 
     row = result.fetchone()
     if row is None:
-        # Counter was at or above limit — fetch current count for error message
+        # WHERE clause did not match — counter was at or above limit today
         return False, (
             f"Free tier limit reached ({daily_limit} searches/day). "
             "Upgrade to Pro at mcpmagic.io for unlimited searches."

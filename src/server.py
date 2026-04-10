@@ -541,6 +541,16 @@ async def get_notifications(
         except ValueError:
             return {"error": "Invalid profile_id format."}
 
+        # Verify the profile belongs to this user before returning notifications
+        profile_check = await session.execute(
+            sa_select(CompanyProfile).where(
+                CompanyProfile.id == profile_uid,
+                CompanyProfile.user_id == user.id,
+            )
+        )
+        if not profile_check.scalar_one_or_none():
+            return {"error": "Profile not found or access denied."}
+
         filters = [Notification.profile_id == profile_uid]
         if unread_only:
             filters.append(Notification.read.is_(False))
