@@ -5,7 +5,6 @@ FastMCP server exposing 7 tools for AI agents to search federal opportunities.
 
 import logging
 import uuid as uuid_lib
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 from fastmcp import FastMCP
@@ -21,8 +20,6 @@ from src.models.profile import CompanyProfile
 from src.services.matching import match_opportunities_to_profile
 from src.services.parsing import parse_solicitation_pdf
 from src.services.search import _serialize, search_opportunities
-from src.sync.scheduler import create_scheduler, run_initial_sync
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -35,21 +32,6 @@ mcp = FastMCP(
         "Get a free key at mcpmagic.io."
     ),
 )
-
-_scheduler = None
-
-
-@asynccontextmanager
-async def lifespan(_):
-    global _scheduler
-    logger.info("Starting MCP Magic server...")
-    _scheduler = create_scheduler()
-    _scheduler.start()
-    import asyncio
-    asyncio.create_task(run_initial_sync())
-    yield
-    if _scheduler:
-        _scheduler.shutdown()
 
 
 async def _resolve_user(api_key: str):
@@ -592,4 +574,150 @@ async def get_notifications(
                 for notif, opp in rows
             ],
             "count": len(rows),
+        }
+
+
+# ─────────────────────────────────────────────
+# Tool 8: save_profile (Pro)
+# ─────────────────────────────────────────────
+
+@mcp.tool()
+async def save_profile(
+    api_key: str,
+    name: str,
+    capabilities: list[str] | None = None,
+    naics_codes: list[str] | None = None,
+    certifications: list[str] | None = None,
+    past_agencies: list[str] | None = None,
+    description: str | None = None,
+    profile_id: str | None = None,
+) -> dict:
+    """Create or update a company profile for opportunity matching and notifications.
+
+    Saved profiles are used by match_to_profile and get_notifications.
+    You can have up to 3 profiles on Pro, 20 on Agency.
+
+    Args:
+        api_key: Your MCP Magic API key (Pro tier required)
+        name: Company name (e.g. "Acme Cyber LLC")
+        capabilities: List of capabilities (e.g. ["penetration testing", "cloud migration", "FedRAMP"])
+        naics_codes: Your applicable NAICS codes (e.g. ["541511", "541512", "541519"])
+        certifications: Your certifications (e.g. ["SDVOSB", "8a", "HUBZone", "WOSB", "SB"])
+        past_agencies: Agencies you have past performance with (e.g. ["DoD", "DHS", "VA"])
+        description: Free-text company description for semantic matching
+        profile_id: UUID of existing profile to update (omit to create new)
+
+    Returns:
+        dict with profile_id, name, and confirmation message
+    """
+    user, err = await _resolve_user(api_key)
+    if err:
+        return {"error": err}
+    ok, reason = requires_pro(user)
+    if not ok:
+        return {"error": reason}
+
+    from src.models.user import TIER_LIMITS, UserTier
+    max_profiles = TIER_LIMITS.get(user.tier, {}).get("profiles", 3)
+    if max_profiles == 0:
+        max_profiles = 3  # trial users get pro limits
+
+    async with AsyncSessionLocal() as session:
+        if profile_id:
+            # Update existing
+            try:
+                uid = uuid_lib.UUID(profile_id)
+            except ValueError:
+                return {"error": "Invalid profile_id format."}
+            result = await session.execute(
+                select(CompanyProfile).where(
+                    CompanyProfile.id == uid, CompanyProfile.user_id == user.id
+                )
+            )
+            profile = result.scalar_one_or_none()
+            if not profile:
+                return {"error": "Profile not found or does not belong to your account."}
+        else:
+            # Check profile limit
+            from sqlalchemy import func as sqlfunc
+            count_result = await session.execute(
+                select(sqlfunc.count()).select_from(CompanyProfile).where(
+                    CompanyProfile.user_id == user.id
+                )
+            )
+            count = count_result.scalar() or 0
+            if count >= max_profiles:
+                return {
+                    "error": f"Profile limit reached ({max_profiles} on your plan). "
+                    "Upgrade to Agency for 20 profiles."
+                }
+            profile = CompanyProfile(user_id=user.id, name=name)
+            session.add(profile)
+
+        profile.name = name
+        if capabilities is not None:
+            profile.capabilities = capabilities
+        if naics_codes is not None:
+            profile.naics_codes = naics_codes
+        if certifications is not None:
+            profile.certifications = certifications
+        if past_agencies is not None:
+            profile.past_agencies = past_agencies
+        if description is not None:
+            profile.description = description
+
+        await session.commit()
+        await session.refresh(profile)
+
+        return {
+            "profile_id": str(profile.id),
+            "name": profile.name,
+            "capabilities": profile.capabilities,
+            "naics_codes": profile.naics_codes,
+            "certifications": profile.certifications,
+            "past_agencies": profile.past_agencies,
+            "message": (
+                f"Profile '{profile.name}' saved. Use profile_id={profile.id} "
+                "with match_to_profile and get_notifications."
+            ),
+        }
+
+
+# ─────────────────────────────────────────────
+# Tool 9: list_profiles
+# ─────────────────────────────────────────────
+
+@mcp.tool()
+async def list_profiles(api_key: str) -> dict:
+    """List your saved company profiles.
+
+    Args:
+        api_key: Your MCP Magic API key
+
+    Returns:
+        List of your saved profiles with their IDs
+    """
+    user, err = await _resolve_user(api_key)
+    if err:
+        return {"error": err}
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(CompanyProfile).where(CompanyProfile.user_id == user.id)
+        )
+        profiles = result.scalars().all()
+
+        return {
+            "profiles": [
+                {
+                    "profile_id": str(p.id),
+                    "name": p.name,
+                    "capabilities": p.capabilities,
+                    "naics_codes": p.naics_codes,
+                    "certifications": p.certifications,
+                    "created_at": p.created_at.isoformat() if p.created_at else None,
+                }
+                for p in profiles
+            ],
+            "count": len(profiles),
         }

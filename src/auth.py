@@ -1,7 +1,7 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.user import TIER_LIMITS, User, UserTier
@@ -12,6 +12,7 @@ def generate_api_key() -> str:
 
 
 async def get_user_by_api_key(api_key: str, session: AsyncSession) -> User | None:
+    from sqlalchemy import select
     result = await session.execute(select(User).where(User.api_key == api_key))
     return result.scalar_one_or_none()
 
@@ -30,38 +31,58 @@ async def create_user(email: str, session: AsyncSession) -> User:
 
 
 async def check_search_limit(user: User, session: AsyncSession) -> tuple[bool, str]:
-    """Returns (allowed, reason). Resets daily counter if needed."""
+    """Returns (allowed, reason). Uses atomic UPDATE to prevent race conditions."""
     now = datetime.now(UTC)
-
-    # Reset counter if it's a new day
-    if user.searches_reset_at is None or user.searches_reset_at.date() < now.date():
-        user.searches_today = 0
-        user.searches_reset_at = now
-        await session.commit()
 
     # Check trial (treat as pro during trial)
     effective_tier = user.tier
-    if user.trial_ends_at and user.trial_ends_at > now and user.tier == UserTier.FREE:
+    if user.trial_ends_at and user.trial_ends_at.replace(tzinfo=UTC) > now and user.tier == UserTier.FREE:
         effective_tier = UserTier.PRO
 
     limits = TIER_LIMITS[effective_tier]
     if limits["searches_per_day"] == -1:
         return True, ""
 
-    if user.searches_today >= limits["searches_per_day"]:
+    daily_limit = limits["searches_per_day"]
+
+    # Reset counter if new day — atomic update
+    reset_result = await session.execute(
+        update(User)
+        .where(
+            User.id == user.id,
+            text("DATE(searches_reset_at AT TIME ZONE 'UTC') < CURRENT_DATE"),
+        )
+        .values(searches_today=0, searches_reset_at=now)
+        .returning(User.searches_today)
+    )
+    await session.commit()
+
+    # Atomic increment — only succeeds if under limit
+    result = await session.execute(
+        update(User)
+        .where(User.id == user.id, User.searches_today < daily_limit)
+        .values(searches_today=User.searches_today + 1)
+        .returning(User.searches_today)
+    )
+    await session.commit()
+
+    row = result.fetchone()
+    if row is None:
+        # Counter was at or above limit — fetch current count for error message
         return False, (
-            f"Free tier limit reached ({limits['searches_per_day']} searches/day). "
+            f"Free tier limit reached ({daily_limit} searches/day). "
             "Upgrade to Pro at mcpmagic.io for unlimited searches."
         )
 
-    user.searches_today += 1
-    await session.commit()
     return True, ""
 
 
 def requires_pro(user: User) -> tuple[bool, str]:
     now = datetime.now(UTC)
-    in_trial = user.trial_ends_at and user.trial_ends_at > now
+    trial_end = user.trial_ends_at
+    if trial_end and trial_end.tzinfo is None:
+        trial_end = trial_end.replace(tzinfo=UTC)
+    in_trial = trial_end is not None and trial_end > now
     if user.tier in (UserTier.PRO, UserTier.AGENCY) or in_trial:
         return True, ""
     return False, "This feature requires a Pro subscription. Upgrade at mcpmagic.io."

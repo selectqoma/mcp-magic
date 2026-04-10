@@ -8,10 +8,12 @@ Pipeline:
   5. Return structured requirements dict + confidence score
 """
 
+import ipaddress
 import logging
 import re
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
@@ -21,6 +23,36 @@ logger = logging.getLogger(__name__)
 
 # Minimum average characters per page — below this we assume scanned PDF
 MIN_CHARS_PER_PAGE = 100
+
+# Max PDF size to download (20 MB)
+MAX_PDF_BYTES = 20 * 1024 * 1024
+
+# Allowed hostname suffixes for PDF downloads — SSRF protection
+ALLOWED_HOSTS = (
+    ".gov",
+    ".mil",
+)
+
+
+def _is_safe_url(url: str) -> bool:
+    """Block private IPs and non-government hosts."""
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        # Block private/loopback IPs
+        try:
+            ip = ipaddress.ip_address(host)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return False
+        except ValueError:
+            pass  # not an IP — check hostname
+        # Only allow .gov and .mil domains
+        if not any(host.endswith(suffix) for suffix in ALLOWED_HOSTS):
+            logger.warning(f"PDF URL blocked (non-gov host): {host}")
+            return False
+        return True
+    except Exception:
+        return False
 
 EXTRACTION_PROMPT = """You are extracting structured information from a US government solicitation document.
 
@@ -56,17 +88,30 @@ async def parse_solicitation_pdf(url: str) -> dict:
     except ImportError:
         return {"error": "PDF parsing library not installed", "parsing_confidence": 0.0}
 
-    # Download the PDF
+    # SSRF protection: only allow .gov/.mil hosts
+    if not _is_safe_url(url):
+        return {"error": "PDF URL not allowed (must be a .gov or .mil domain).", "parsing_confidence": 0.0}
+
+    # Download the PDF with size limit
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
             resp = await client.get(url)
             resp.raise_for_status()
+            content_length = int(resp.headers.get("content-length", 0))
+            if content_length > MAX_PDF_BYTES:
+                return {"error": f"PDF too large ({content_length // 1024 // 1024}MB, max 20MB).", "parsing_confidence": 0.0}
+            # Stream read with size cap
+            data = b""
+            async for chunk in resp.aiter_bytes(chunk_size=65536):
+                data += chunk
+                if len(data) > MAX_PDF_BYTES:
+                    return {"error": "PDF too large (>20MB).", "parsing_confidence": 0.0}
     except Exception as e:
         logger.error(f"Failed to download PDF from {url}: {e}")
         return {"error": f"Could not download PDF: {e}", "parsing_confidence": 0.0}
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-        tmp.write(resp.content)
+        tmp.write(data)
         tmp_path = Path(tmp.name)
 
     try:

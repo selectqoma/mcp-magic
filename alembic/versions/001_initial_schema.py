@@ -45,8 +45,13 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
     )
+    op.create_index("idx_opps_source_id", "opportunities", ["source", "source_id"])
     op.create_index("idx_opps_deadline", "opportunities", ["response_deadline"])
     op.create_index("idx_opps_naics", "opportunities", ["naics_codes"], postgresql_using="gin")
+    # ivfflat index for fast cosine similarity search — must be created AFTER data is loaded
+    # Run manually after initial sync: CREATE INDEX idx_opps_embedding ON opportunities
+    # USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+    # (Skipped here because ivfflat requires rows to exist first)
 
     op.create_table(
         "awards",
@@ -109,6 +114,7 @@ def upgrade() -> None:
         sa.Column("match_score", sa.Float),
         sa.Column("read", sa.Boolean, server_default="false"),
         sa.Column("matched_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.UniqueConstraint("profile_id", "opportunity_id", name="uq_notification_profile_opp"),
     )
 
 

@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, cast, or_, select, text
+from sqlalchemy import and_, cast, func, or_, select, text
 from sqlalchemy.dialects.postgresql import ARRAY, VARCHAR
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,19 +74,21 @@ async def search_opportunities(
     where_clause = and_(*filters) if filters else text("true")
 
     if query:
-        # Semantic search: order by cosine similarity
+        # Semantic search: order by cosine similarity using bound parameter (not string interpolation)
         embedding = await embed_text(query)
         emb_str = f"[{','.join(str(x) for x in embedding)}]"
+        semantic_filter = and_(where_clause, Opportunity.embedding.is_not(None))
         stmt = (
             select(Opportunity)
-            .where(where_clause)
-            .where(Opportunity.embedding.is_not(None))
+            .where(semantic_filter)
             .order_by(
-                text(f"embedding <=> '{emb_str}'::vector")
+                text("embedding <=> :q_vec").bindparams(q_vec=emb_str)
             )
             .limit(limit)
             .offset(offset)
         )
+        # Count uses same filter set (including embedding not-null)
+        count_stmt = select(func.count()).select_from(Opportunity).where(semantic_filter)
     else:
         stmt = (
             select(Opportunity)
@@ -95,12 +97,11 @@ async def search_opportunities(
             .limit(limit)
             .offset(offset)
         )
+        count_stmt = select(func.count()).select_from(Opportunity).where(where_clause)
 
     result = await session.execute(stmt)
     opps = result.scalars().all()
 
-    # Count total
-    count_stmt = select(text("count(*)")).select_from(Opportunity).where(where_clause)
     total = (await session.execute(count_stmt)).scalar() or 0
 
     return {
