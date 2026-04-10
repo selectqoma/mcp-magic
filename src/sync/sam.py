@@ -34,7 +34,7 @@ def _parse_opportunity(item: dict) -> dict:
         "title": notice.get("title", ""),
         "description": notice.get("description") or notice.get("synopsis", ""),
         "agency": notice.get("fullParentPathName") or notice.get("organizationName", ""),
-        "naics_codes": [notice["naicsCode"]] if notice.get("naicsCode") else [],
+        "naics_codes": _parse_naics(notice),
         "set_aside_type": notice.get("typeOfSetAside") or notice.get("setAside"),
         "posted_date": _parse_date(notice.get("postedDate")),
         "response_deadline": _parse_date(
@@ -49,12 +49,30 @@ def _parse_opportunity(item: dict) -> dict:
     }
 
 
+def _parse_naics(notice: dict) -> list[str]:
+    """Extract NAICS codes; SAM returns either a single string or an array."""
+    codes = notice.get("naicsCodes") or []
+    if isinstance(codes, list):
+        result = [str(c) for c in codes if c]
+    else:
+        result = [str(codes)] if codes else []
+    # Also include the single naicsCode field if present and not already there
+    single = notice.get("naicsCode")
+    if single and str(single) not in result:
+        result.append(str(single))
+    return result
+
+
 def _parse_date(val: str | None) -> datetime | None:
     if not val:
         return None
-    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y"):
+    # Try each format against the full value, not a truncated format string
+    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y"):
         try:
-            return datetime.strptime(val[:19], fmt[:len(val[:19])]).replace(tzinfo=UTC)
+            parsed = datetime.strptime(val[:len(fmt)], fmt)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            return parsed
         except ValueError:
             continue
     return None

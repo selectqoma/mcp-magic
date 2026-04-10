@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
@@ -17,21 +17,46 @@ logger = logging.getLogger(__name__)
 _scheduler = None
 _initial_sync_done = False
 
+# Build the MCP ASGI app once at module init so its lifespan can be referenced
+# before create_app() is called.
+def _build_mcp_asgi():
+    from src.server import mcp
+    try:
+        return mcp.sse_app()
+    except AttributeError:
+        return mcp.http_app(path="/")
+
+_mcp_asgi = _build_mcp_asgi()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _scheduler, _initial_sync_done
-    logger.info("Starting MCP Magic server...")
-    _scheduler = create_scheduler()
-    _scheduler.start()
-    # Only run initial sync if not recently done (guard against restart spam)
-    if not _initial_sync_done:
-        _initial_sync_done = True
-        asyncio.create_task(_safe_initial_sync())
-    yield
-    if _scheduler:
-        _scheduler.shutdown()
-        logger.info("Scheduler shut down.")
+
+    async with AsyncExitStack() as stack:
+        # Propagate FastMCP's own lifespan (initializes session manager / task groups)
+        if hasattr(_mcp_asgi, "router") and callable(
+            getattr(_mcp_asgi.router, "lifespan_context", None)
+        ):
+            try:
+                await stack.enter_async_context(_mcp_asgi.router.lifespan_context(app))
+                logger.info("FastMCP lifespan started.")
+            except Exception as e:
+                logger.warning(f"Could not enter FastMCP lifespan: {e}")
+
+        logger.info("Starting MCP Magic server...")
+        _scheduler = create_scheduler()
+        _scheduler.start()
+
+        if not _initial_sync_done:
+            _initial_sync_done = True
+            asyncio.create_task(_safe_initial_sync())
+
+        yield
+
+        if _scheduler:
+            _scheduler.shutdown(wait=False)
+            logger.info("Scheduler shut down.")
 
 
 async def _safe_initial_sync():
@@ -41,39 +66,28 @@ async def _safe_initial_sync():
         logger.error(f"Initial sync failed: {e}", exc_info=True)
 
 
-# Build the unified app with a single lifespan
 def create_app() -> FastAPI:
     from src.api import app as api_app
-    from src.server import mcp
 
-    # Re-create api_app with our lifespan (api_app was created without one)
     main_app = FastAPI(title="MCP Magic", lifespan=lifespan, docs_url=None, redoc_url=None)
 
-    # CORS for the landing page registration form
     main_app.add_middleware(
         CORSMiddleware,
-        allow_origins=["https://mcpmagic.io", "http://localhost:3000"],
+        allow_origins=[
+            "https://mcpmagic.io",
+            "https://www.mcpmagic.io",
+            "http://localhost:3000",
+        ],
         allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"],
     )
 
-    # Mount REST routes from api_app
+    # REST routes (register, webhooks, landing page)
     main_app.include_router(api_app.router)
 
-    # Mount FastMCP SSE app — correct API for FastMCP 2.x
-    # mcp.sse_app() returns an ASGI app that serves at /sse
-    try:
-        mcp_asgi = mcp.sse_app()
-        main_app.mount("/mcp", mcp_asgi)
-        logger.info("FastMCP mounted at /mcp (SSE endpoint: /mcp/sse)")
-    except AttributeError:
-        # FastMCP 2.x fallback — try http_app (streamable HTTP transport)
-        try:
-            mcp_asgi = mcp.http_app(path="/")
-            main_app.mount("/mcp", mcp_asgi)
-            logger.info("FastMCP mounted at /mcp (HTTP transport)")
-        except Exception as e:
-            logger.error(f"Could not mount FastMCP ASGI app: {e}. Check FastMCP version.")
+    # FastMCP ASGI — SSE endpoint at /mcp/sse, messages at /mcp/messages/
+    main_app.mount("/mcp", _mcp_asgi)
+    logger.info("FastMCP mounted at /mcp")
 
     return main_app
 

@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db import AsyncSessionLocal
@@ -46,14 +47,19 @@ async def run_notification_matching():
                     profile_embedding=None,  # skip embedding for batch perf
                 )
                 if score >= 0.5:  # higher threshold for auto-notifications
-                    notif = Notification(
-                        profile_id=profile.id,
-                        opportunity_id=opp.id,
-                        match_score=round(score, 3),
-                    )
-                    session.add(notif)
                     notifications_created += 1
+                    await session.execute(
+                        pg_insert(Notification)
+                        .values(
+                            profile_id=profile.id,
+                            opportunity_id=opp.id,
+                            match_score=round(score, 3),
+                        )
+                        .on_conflict_do_nothing(
+                            constraint="uq_notification_profile_opp"
+                        )
+                    )
 
         if notifications_created:
             await session.commit()
-            logger.info(f"Created {notifications_created} new notifications")
+            logger.info(f"Upserted up to {notifications_created} new notifications")

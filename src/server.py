@@ -628,9 +628,17 @@ async def save_profile(
         return {"error": reason}
 
     from src.models.user import TIER_LIMITS, UserTier
-    max_profiles = TIER_LIMITS.get(user.tier, {}).get("profiles", 3)
-    if max_profiles == 0:
-        max_profiles = 3  # trial users get pro limits
+    # requires_pro already passed above, so user is either PRO/AGENCY or in trial.
+    # During trial, grant Pro-level limits; otherwise use the actual tier.
+    from src.auth import requires_pro as _rp
+    from datetime import UTC, datetime as _dt
+    _now = _dt.now(UTC)
+    _trial_end = user.trial_ends_at
+    if _trial_end and _trial_end.tzinfo is None:
+        _trial_end = _trial_end.replace(tzinfo=UTC)
+    _in_trial = _trial_end is not None and _trial_end > _now and user.tier == UserTier.FREE
+    _effective_tier = UserTier.PRO if _in_trial else user.tier
+    max_profiles = TIER_LIMITS.get(_effective_tier, {}).get("profiles", 3)
 
     async with AsyncSessionLocal() as session:
         if profile_id:

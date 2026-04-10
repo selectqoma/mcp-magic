@@ -24,7 +24,7 @@ PAGE_SIZE = 50
 def _parse_solicitation(item: dict) -> dict:
     return {
         "source": "sbir",
-        "source_id": f"SBIR-{item.get('solicitation_id') or item.get('program_year', '')}",
+        "source_id": f"SBIR-{item.get('solicitation_id') or item.get('solicitation_number') or item.get('topic_number', '')}",
         "title": item.get("program", "") + " - " + item.get("agency", ""),
         "description": item.get("solicitation_topics", ""),
         "agency": item.get("agency", ""),
