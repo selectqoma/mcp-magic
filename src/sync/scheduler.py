@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -27,34 +26,29 @@ def create_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
 
     scheduler.add_job(
-        lambda: asyncio.create_task(run_sync("SAM.gov", sync_sam_opportunities)),
+        run_sync, args=["SAM.gov", sync_sam_opportunities],
         trigger=IntervalTrigger(seconds=settings.sam_sync_interval),
-        id="sam_sync",
-        replace_existing=True,
+        id="sam_sync", replace_existing=True,
     )
     scheduler.add_job(
-        lambda: asyncio.create_task(run_sync("Grants.gov", sync_grants_opportunities)),
+        run_sync, args=["Grants.gov", sync_grants_opportunities],
         trigger=IntervalTrigger(seconds=settings.grants_sync_interval),
-        id="grants_sync",
-        replace_existing=True,
+        id="grants_sync", replace_existing=True,
     )
     scheduler.add_job(
-        lambda: asyncio.create_task(run_sync("SBIR.gov", sync_sbir_opportunities)),
+        run_sync, args=["SBIR.gov", sync_sbir_opportunities],
         trigger=IntervalTrigger(seconds=settings.sbir_sync_interval),
-        id="sbir_sync",
-        replace_existing=True,
+        id="sbir_sync", replace_existing=True,
     )
     scheduler.add_job(
-        lambda: asyncio.create_task(run_sync("USASpending", sync_usaspending_awards)),
+        run_sync, args=["USASpending", sync_usaspending_awards],
         trigger=IntervalTrigger(seconds=settings.usaspending_sync_interval),
-        id="usaspending_sync",
-        replace_existing=True,
+        id="usaspending_sync", replace_existing=True,
     )
     scheduler.add_job(
-        lambda: asyncio.create_task(run_sync("Notifications", run_notification_matching)),
-        trigger=IntervalTrigger(seconds=settings.sam_sync_interval),  # run after each SAM sync
-        id="notification_matching",
-        replace_existing=True,
+        run_sync, args=["Notifications", run_notification_matching],
+        trigger=IntervalTrigger(seconds=settings.sam_sync_interval),
+        id="notification_matching", replace_existing=True,
     )
 
     return scheduler
