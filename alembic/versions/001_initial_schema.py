@@ -9,7 +9,6 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
-from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects import postgresql
 
 revision: str = "001"
@@ -53,17 +52,20 @@ def upgrade() -> None:
         sa.Column("attachments", postgresql.JSONB),
         sa.Column("requirements", postgresql.JSONB),
         sa.Column("raw_data", postgresql.JSONB),
-        sa.Column("embedding", Vector(1536)),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
     )
     op.create_index("idx_opps_source_id", "opportunities", ["source", "source_id"])
     op.create_index("idx_opps_deadline", "opportunities", ["response_deadline"])
     op.create_index("idx_opps_naics", "opportunities", ["naics_codes"], postgresql_using="gin")
-    # ivfflat index for fast cosine similarity search — must be created AFTER data is loaded
-    # Run manually after initial sync: CREATE INDEX idx_opps_embedding ON opportunities
-    # USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-    # (Skipped here because ivfflat requires rows to exist first)
+
+    # Add vector embedding column only if pgvector is available.
+    op.execute(sa.text("""
+        DO $$ BEGIN
+            ALTER TABLE opportunities ADD COLUMN embedding vector(1536);
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END $$;
+    """))
 
     op.create_table(
         "awards",
