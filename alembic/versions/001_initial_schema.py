@@ -19,21 +19,20 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Extensions — wrapped separately so a missing pgvector doesn't abort table creation.
-    # Semantic search requires vector; SQL search still works without it.
-    conn = op.get_bind()
-    try:
-        conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS vector"))
-    except Exception as e:
-        import warnings
-        warnings.warn(f"pgvector extension unavailable — semantic search disabled: {e}")
-        conn.execute(sa.text("ROLLBACK"))
-        conn.execute(sa.text("BEGIN"))
-    try:
-        conn.execute(sa.text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
-    except Exception:
-        conn.execute(sa.text("ROLLBACK"))
-        conn.execute(sa.text("BEGIN"))
+    # Extensions — DO blocks run in their own PL/pgSQL scope, so a failure doesn't
+    # abort the surrounding alembic transaction.
+    op.execute(sa.text("""
+        DO $$ BEGIN
+            CREATE EXTENSION IF NOT EXISTS vector;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END $$;
+    """))
+    op.execute(sa.text("""
+        DO $$ BEGIN
+            CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END $$;
+    """))
 
     op.create_table(
         "opportunities",

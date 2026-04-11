@@ -32,6 +32,7 @@ async def run_migrations_online():
     connectable = create_async_engine(settings.database_url)
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
+        await connection.commit()  # required for async SQLAlchemy 2.0 — without this DDL is never committed
     await connectable.dispose()
 
 
