@@ -24,7 +24,11 @@ def run_migrations_offline():
 
 
 def do_run_migrations(connection):
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        transaction_per_migration=True,  # each migration in its own tx — failure in 002 won't roll back 001
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -42,7 +46,7 @@ async def run_migrations_online():
         if table_count < 5:
             await connection.execute(sa.text("DROP TABLE IF EXISTS alembic_version"))
             await connection.execute(sa.text(
-                "DROP TABLE IF EXISTS notifications, company_profiles, users, awards, opportunities CASCADE"
+                "DROP TABLE IF EXISTS paddle_webhook_events, notifications, company_profiles, users, awards, opportunities CASCADE"
             ))
             await connection.commit()
 
