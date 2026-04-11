@@ -27,7 +27,7 @@ PAGE_SIZE = 100
 
 def _parse_opportunity(item: dict) -> dict:
     """Normalize a SAM.gov API response item into our schema."""
-    notice = item.get("notice", item)  # handle both wrapped and flat responses
+    notice = item.get("notice") or item  # handle both wrapped and flat responses; "notice": null → fall back to item
     return {
         "source": "sam",
         "source_id": notice.get("noticeId") or notice.get("solicitationNumber", ""),
@@ -40,7 +40,7 @@ def _parse_opportunity(item: dict) -> dict:
         "response_deadline": _parse_date(
             notice.get("responseDeadLine") or notice.get("archiveDate")
         ),
-        "estimated_value_low": _parse_float(notice.get("award", {}).get("amount")),
+        "estimated_value_low": _parse_float((notice.get("award") or {}).get("amount")),
         "estimated_value_high": None,
         "place_of_performance": _format_place(notice.get("placeOfPerformance")),
         "contact_info": notice.get("pointOfContact"),
