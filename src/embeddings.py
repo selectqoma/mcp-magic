@@ -18,7 +18,9 @@ async def embed_text(text: str) -> list[float]:
 
 async def embed_batch(texts: list[str]) -> list[list[float]]:
     """Embed multiple texts in one API call (max 2048 inputs)."""
-    cleaned = [t.replace("\n", " ").strip()[:8000] for t in texts]
+    if not texts:
+        return []
+    cleaned = [(t or "").replace("\n", " ").strip()[:8000] for t in texts]
     response = await _client.embeddings.create(
         model=settings.embedding_model,
         input=cleaned,

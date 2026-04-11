@@ -25,7 +25,7 @@ def _parse_solicitation(item: dict) -> dict:
     return {
         "source": "sbir",
         "source_id": f"SBIR-{item.get('solicitation_id') or item.get('solicitation_number') or item.get('topic_number', '')}",
-        "title": item.get("program", "") + " - " + item.get("agency", ""),
+        "title": (item.get("program") or "") + " - " + (item.get("agency") or ""),
         "description": item.get("solicitation_topics", ""),
         "agency": item.get("agency", ""),
         "naics_codes": [],
@@ -78,7 +78,7 @@ async def sync_sbir_opportunities() -> int:
                 logger.error(f"SBIR.gov API error: {e}")
                 break
 
-            items = data if isinstance(data, list) else data.get("solicitations", [])
+            items = data if isinstance(data, list) else (data.get("solicitations") or [])
             if not items:
                 break
 

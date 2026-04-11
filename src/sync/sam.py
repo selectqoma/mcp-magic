@@ -44,7 +44,7 @@ def _parse_opportunity(item: dict) -> dict:
         "estimated_value_high": None,
         "place_of_performance": _format_place(notice.get("placeOfPerformance")),
         "contact_info": notice.get("pointOfContact"),
-        "attachments": _parse_attachments(notice.get("resourceLinks", [])),
+        "attachments": _parse_attachments(notice.get("resourceLinks") or []),
         "raw_data": item,
     }
 
@@ -128,7 +128,7 @@ async def sync_sam_opportunities() -> int:
                 logger.error(f"SAM.gov API error: {e}")
                 break
 
-            items = data.get("opportunitiesData", [])
+            items = data.get("opportunitiesData") or []
             if not items:
                 break
 
@@ -161,7 +161,7 @@ async def sync_sam_opportunities() -> int:
                 await session.commit()
 
             ingested += len(parsed)
-            total = data.get("totalRecords", 0)
+            total = data.get("totalRecords") or 0
             params["offset"] += PAGE_SIZE
 
             if params["offset"] >= total or params["offset"] >= 10000:

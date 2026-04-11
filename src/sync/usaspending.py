@@ -86,7 +86,7 @@ async def sync_usaspending_awards() -> int:
                 logger.error(f"USASpending API error: {e}")
                 break
 
-            items = data.get("results", [])
+            items = data.get("results") or []
             if not items:
                 break
 
@@ -108,8 +108,8 @@ async def sync_usaspending_awards() -> int:
                 await session.commit()
 
             ingested += len(parsed)
-            page_meta = data.get("page_metadata", {})
-            if not page_meta.get("hasNext", False):
+            page_meta = data.get("page_metadata") or {}
+            if not page_meta.get("hasNext") and not page_meta.get("has_next_page"):
                 break
             payload["page"] += 1
 

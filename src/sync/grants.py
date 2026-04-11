@@ -83,7 +83,7 @@ async def sync_grants_opportunities() -> int:
                 logger.error(f"Grants.gov API error: {e}")
                 break
 
-            items = data.get("oppHits", [])
+            items = data.get("oppHits") or []
             if not items:
                 break
 
@@ -114,7 +114,7 @@ async def sync_grants_opportunities() -> int:
                 await session.commit()
 
             ingested += len(parsed)
-            total = data.get("hitCount", 0)
+            total = data.get("hitCount") or 0
             payload["startRecordNum"] += PAGE_SIZE
 
             if payload["startRecordNum"] >= total:
