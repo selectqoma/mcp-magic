@@ -1,100 +1,83 @@
-    return await self._prepare(
-(Background on this error at: https://sqlalche.me/e/20/f405)
-           ^^^^^^^^^^^^^^^^^^^^
+2026-04-11 14:26:33,777 INFO apscheduler.executors.default Running job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 14:41:33 UTC)" (scheduled at 2026-04-11 14:26:33.775190+00:00)
+2026-04-11 14:26:33,776 INFO apscheduler.executors.default Running job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 14:41:33 UTC)" (scheduled at 2026-04-11 14:26:33.774752+00:00)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-11 14:26:33,778 ERROR apscheduler.executors.default Job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 14:41:33 UTC)" raised an exception
 Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/asyncpg/connection.py", line 657, in _prepare
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 526, in _prepare_and_execute
-    prepared_stmt, attributes = await adapt_connection._prepare(
-    stmt = await self._get_statement(
-                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 773, in _prepare
-  File "/usr/local/lib/python3.11/site-packages/asyncpg/connection.py", line 443, in _get_statement
-    prepared_stmt = await self._connection.prepare(
-    statement = await self._protocol.prepare(
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/asyncpg/connection.py", line 638, in prepare
-  File "asyncpg/protocol/protocol.pyx", line 165, in prepare
-asyncpg.exceptions.UndefinedTableError: relation "awards" does not exist
-The above exception was the direct cause of the following exception:
+  File "/usr/local/lib/python3.11/site-packages/apscheduler/executors/base.py", line 131, in run_job
+    retval = job.func(*job.args, **job.kwargs)
+  File "/app/src/sync/scheduler.py", line 30, in <lambda>
+    lambda: asyncio.create_task(run_sync("SAM.gov", sync_sam_opportunities)),
 Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
-    self.dialect.do_execute(
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
-    cursor.execute(statement, parameters)
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
-    self._adapt_connection.await_(
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
-    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
-    value = await result
-            ^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
-    self._handle_exception(error)
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
-    self._adapt_connection._handle_exception(error)
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
-    raise translated_error from error
-sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.ProgrammingError: <class 'asyncpg.exceptions.UndefinedTableError'>: relation "awards" does not exist
-The above exception was the direct cause of the following exception:
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/apscheduler/executors/base.py", line 131, in run_job
+    retval = job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 381, in create_task
+    loop = events.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+2026-04-11 14:41:33,775 INFO apscheduler.executors.default Running job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 14:56:33 UTC)" (scheduled at 2026-04-11 14:41:33.774752+00:00)
+2026-04-11 14:41:33,775 INFO apscheduler.executors.default Running job "create_scheduler.<locals>.<lambda> (trigger: interval[0:30:00], next run at: 2026-04-11 15:11:33 UTC)" (scheduled at 2026-04-11 14:41:33.775002+00:00)
+2026-04-11 14:41:33,776 INFO apscheduler.executors.default Running job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 14:56:33 UTC)" (scheduled at 2026-04-11 14:41:33.775190+00:00)
+2026-04-11 14:41:33,776 ERROR apscheduler.executors.default Job "create_scheduler.<locals>.<lambda> (trigger: interval[0:30:00], next run at: 2026-04-11 15:11:33 UTC)" raised an exception
 Traceback (most recent call last):
-  File "/app/src/sync/scheduler.py", line 20, in run_sync
-    count = await fn()
-            ^^^^^^^^^^
-  File "/app/src/sync/usaspending.py", line 107, in sync_usaspending_awards
-    await session.execute(stmt)
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
-    result = await greenlet_spawn(
-             ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
-    result = context.throw(*sys.exc_info())
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
-    return self._execute_internal(
-           ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
-    result: Result[Any] = compile_state_cls.orm_execute_statement(
-                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/orm/bulk_persistence.py", line 1306, in orm_execute_statement
-    result = conn.execute(
-             ^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
-    return meth(
-           ^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
-    return connection._execute_clauseelement(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
-    ret = self._execute_context(
-          ^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
-    return self._exec_single_context(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
-    self._handle_dbapi_exception(
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
-    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
-    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
-    self.dialect.do_execute(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
-    cursor.execute(statement, parameters)
-    value = await result
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
-            ^^^^^^^^^^^^
-    self._adapt_connection.await_(
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
-    self._handle_exception(error)
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
-    self._adapt_connection._handle_exception(error)
-  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
-    raise translated_error from error
-sqlalchemy.exc.ProgrammingError: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedTableError'>: relation "awards" does not exist
-[SQL: INSERT INTO awards (id, award_id, recipient_name, recipient_uei, recipient_cage, agency, sub_agency, title, naics_code, award_amount, award_date, period_of_performance_end, place_of_performance, raw_data) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::VARCHAR, $9::VARCHAR, $10::NUMERIC(20, 2), $11::TIMESTAMP WITH TIME ZONE, $12::TIMESTAMP WITH TIME ZONE, $13::VARCHAR, $14::JSONB) ON CONFLICT (award_id) DO UPDATE SET recipient_name = $15::VARCHAR, recipient_uei = $16::VARCHAR, recipient_cage = $17::VARCHAR, agency = $18::VARCHAR, sub_agency = $19::VARCHAR, title = $20::VARCHAR, naics_code = $21::VARCHAR, award_amount = $22::NUMERIC(20, 2), award_date = $23::TIMESTAMP WITH TIME ZONE, period_of_performance_end = $24::TIMESTAMP WITH TIME ZONE, place_of_performance = $25::VARCHAR, raw_data = $26::JSONB]
-[parameters: (UUID('ebbc0ffb-acae-4dc2-bbc3-fcaf3e6e0398'), 'DEAC5207NA27344', 'LAWRENCE LIVERMORE NATIONAL SECURITY, LLC', None, None, 'Department of Energy', 'Department of Energy', None, None, 40777168345.14, datetime.datetime(2007, 5, 9, 0, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2031, 9, 30, 0, 0, tzinfo=datetime.timezone.utc), 'CA', '{"internal_id": 295477233, "Award ID": "DEAC5207NA27344", "Recipient Name": "LAWRENCE LIVERMORE NATIONAL SECURITY, LLC", "Award Amount": 40777168345. ... (224 characters truncated) ... ode": "CA", "awarding_agency_id": 930, "agency_slug": "department-of-energy", "generated_internal_id": "CONT_AWD_DEAC5207NA27344_8900_-NONE-_-NONE-"}', 'LAWRENCE LIVERMORE NATIONAL SECURITY, LLC', None, None, 'Department of Energy', 'Department of Energy', None, None, 40777168345.14, datetime.datetime(2007, 5, 9, 0, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2031, 9, 30, 0, 0, tzinfo=datetime.timezone.utc), 'CA', '{"internal_id": 295477233, "Award ID": "DEAC5207NA27344", "Recipient Name": "LAWRENCE LIVERMORE NATIONAL SECURITY, LLC", "Award Amount": 40777168345. ... (224 characters truncated) ... ode": "CA", "awarding_agency_id": 930, "agency_slug": "department-of-energy", "generated_internal_id": "CONT_AWD_DEAC5207NA27344_8900_-NONE-_-NONE-"}')]
-(Background on this error at: https://sqlalche.me/e/20/f405)
+  File "/usr/local/lib/python3.11/site-packages/apscheduler/executors/base.py", line 131, in run_job
+    retval = job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/sync/scheduler.py", line 36, in <lambda>
+    lambda: asyncio.create_task(run_sync("Grants.gov", sync_grants_opportunities)),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 381, in create_task
+    loop = events.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+2026-04-11 14:41:33,776 ERROR apscheduler.executors.default Job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 14:56:33 UTC)" raised an exception
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/apscheduler/executors/base.py", line 131, in run_job
+    retval = job.func(*job.args, **job.kwargs)
+  File "/usr/local/lib/python3.11/site-packages/apscheduler/executors/base.py", line 131, in run_job
+    retval = job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/sync/scheduler.py", line 30, in <lambda>
+    lambda: asyncio.create_task(run_sync("SAM.gov", sync_sam_opportunities)),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 381, in create_task
+    loop = events.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+2026-04-11 14:41:33,777 ERROR apscheduler.executors.default Job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 14:56:33 UTC)" raised an exception
+  File "/app/src/sync/scheduler.py", line 54, in <lambda>
+    lambda: asyncio.create_task(run_sync("Notifications", run_notification_matching)),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 381, in create_task
+    loop = events.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+2026-04-11 14:56:33,775 INFO apscheduler.executors.default Running job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 15:11:33 UTC)" (scheduled at 2026-04-11 14:56:33.774752+00:00)
+2026-04-11 14:56:33,777 INFO apscheduler.executors.default Running job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 15:11:33 UTC)" (scheduled at 2026-04-11 14:56:33.775190+00:00)
+2026-04-11 14:56:33,777 ERROR apscheduler.executors.default Job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 15:11:33 UTC)" raised an exception
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/apscheduler/executors/base.py", line 131, in run_job
+    retval = job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/sync/scheduler.py", line 54, in <lambda>
+    lambda: asyncio.create_task(run_sync("Notifications", run_notification_matching)),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 381, in create_task
+    loop = events.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+2026-04-11 14:56:33,778 ERROR apscheduler.executors.default Job "create_scheduler.<locals>.<lambda> (trigger: interval[0:15:00], next run at: 2026-04-11 15:11:33 UTC)" raised an exception
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/apscheduler/executors/base.py", line 131, in run_job
+    retval = job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/src/sync/scheduler.py", line 30, in <lambda>
+    lambda: asyncio.create_task(run_sync("SAM.gov", sync_sam_opportunities)),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 381, in create_task
+    loop = events.get_running_loop()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
