@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Sync intervals (seconds)
-    sam_sync_interval: int = 900       # 15 min
+    sam_sync_interval: int = 21600      # 6 hrs — SAM.gov free key has tight rate limits
     grants_sync_interval: int = 1800   # 30 min
     sbir_sync_interval: int = 3600     # 1 hr
     usaspending_sync_interval: int = 21600  # 6 hrs

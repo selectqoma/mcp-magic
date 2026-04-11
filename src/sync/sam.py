@@ -7,6 +7,7 @@ Uses the beta.SAM.gov API v2:
 Register for an API key at: https://sam.gov/profile/details
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -122,6 +123,11 @@ async def sync_sam_opportunities() -> int:
         while True:
             try:
                 resp = await client.get(SAM_BASE, params=params)
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", 60))
+                    logger.warning(f"SAM.gov rate limited, waiting {retry_after}s")
+                    await asyncio.sleep(retry_after)
+                    continue
                 resp.raise_for_status()
                 data = resp.json()
             except Exception as e:
