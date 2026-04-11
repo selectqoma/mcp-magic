@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy sources first so pip install -e . can find the package
 COPY . .
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir .
 
 EXPOSE 8000
 
