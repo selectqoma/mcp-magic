@@ -32,13 +32,18 @@ def do_run_migrations(connection):
 async def run_migrations_online():
     connectable = create_async_engine(settings.database_url)
     async with connectable.connect() as connection:
-        # Auto-heal: if alembic_version claims migrations ran but tables are gone, reset it.
-        # This handles the case where a previous deploy partially failed mid-migration.
-        result = await connection.execute(sa.text(
-            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'opportunities')"
-        ))
-        if not result.scalar():
+        # Auto-heal: if alembic_version claims migrations ran but tables are missing, reset it.
+        # Check multiple tables — a partial migration may have created early ones but not later ones.
+        result = await connection.execute(sa.text("""
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_name IN ('opportunities', 'awards', 'users', 'company_profiles', 'notifications')
+        """))
+        table_count = result.scalar()
+        if table_count < 5:
             await connection.execute(sa.text("DROP TABLE IF EXISTS alembic_version"))
+            await connection.execute(sa.text(
+                "DROP TABLE IF EXISTS notifications, company_profiles, users, awards, opportunities CASCADE"
+            ))
             await connection.commit()
 
         await connection.run_sync(do_run_migrations)
