@@ -80,7 +80,7 @@ async def check_search_limit(user: User, session: AsyncSession) -> tuple[bool, s
         # WHERE clause did not match — counter was at or above limit today
         return False, (
             f"Free tier limit reached ({daily_limit} searches/day). "
-            "Upgrade to Pro at mcpmagic.io for unlimited searches."
+            "Upgrade to Pro at govconmcp.com for unlimited searches."
         )
 
     return True, ""
@@ -94,10 +94,10 @@ def requires_pro(user: User) -> tuple[bool, str]:
     in_trial = trial_end is not None and trial_end > now
     if user.tier in (UserTier.PRO, UserTier.AGENCY) or in_trial:
         return True, ""
-    return False, "This feature requires a Pro subscription. Upgrade at mcpmagic.io."
+    return False, "This feature requires a Pro subscription. Upgrade at govconmcp.com."
 
 
 def requires_agency(user: User) -> tuple[bool, str]:
     if user.tier == UserTier.AGENCY:
         return True, ""
-    return False, "This feature requires an Agency subscription. Upgrade at mcpmagic.io."
+    return False, "This feature requires an Agency subscription. Upgrade at govconmcp.com."

@@ -18,7 +18,7 @@ BASE_URL = "http://localhost:8000"
 async def api_key():
     """Register a test user and return their API key."""
     async with httpx.AsyncClient(base_url=BASE_URL) as client:
-        resp = await client.post("/register", json={"email": "test@mcpmagic.io"})
+        resp = await client.post("/register", json={"email": "test@govconmcp.com"})
         if resp.status_code == 409:
             # Already registered — re-use (dev only)
             pytest.skip("Test user already exists — clear DB or use a unique email")

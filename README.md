@@ -1,4 +1,4 @@
-# MCP Magic — Government Contracts & Grants Intelligence
+# GovCon MCP — Government Contracts & Grants Intelligence
 
 Search 75,000+ US federal opportunities from SAM.gov, Grants.gov, and SBIR.gov — directly from your AI agent.
 
@@ -9,9 +9,9 @@ Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "mcp-magic": {
+    "govcon-mcp": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://api.mcpmagic.io/sse"],
+      "args": ["-y", "mcp-remote", "https://api.govconmcp.com/sse"],
       "env": {
         "MCP_API_KEY": "your-api-key-here"
       }
@@ -20,7 +20,7 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-Get a free API key at **mcpmagic.io**.
+Get a free API key at **govconmcp.com**.
 
 ## Tools
 

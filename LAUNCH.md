@@ -27,8 +27,8 @@ Copy-paste ready posts and deploy steps for launch day.
    ```bash
    alembic upgrade head
    ```
-7. Set custom domain: `api.mcpmagic.io` → Railway service URL
-8. Verify: `curl https://api.mcpmagic.io/health` → `{"status":"ok"}`
+7. Set custom domain: `api.govconmcp.com` → Railway service URL
+8. Verify: `curl https://api.govconmcp.com/health` → `{"status":"ok"}`
 
 ---
 
@@ -36,10 +36,10 @@ Copy-paste ready posts and deploy steps for launch day.
 
 1. Create account at paddle.com
 2. Catalog → Products → Create 3:
-   - "MCP Magic Pro" — $49/mo recurring
-   - "MCP Magic Agency" — $199/mo recurring
+   - "GovCon MCP Pro" — $49/mo recurring
+   - "GovCon MCP Agency" — $199/mo recurring
 3. Copy price IDs, add to Railway env: `PADDLE_PRO_PRICE_ID`, `PADDLE_AGENCY_PRICE_ID`
-4. Notifications → Webhooks → Add endpoint: `https://api.mcpmagic.io/webhooks/paddle`
+4. Notifications → Webhooks → Add endpoint: `https://api.govconmcp.com/webhooks/paddle`
 5. Subscribe to: `subscription.created`, `subscription.updated`, `subscription.canceled`, `subscription.past_due`
 6. Copy webhook secret → `PADDLE_WEBHOOK_SECRET`
 7. Test with Paddle sandbox before going live
@@ -60,7 +60,7 @@ Copy-paste ready posts and deploy steps for launch day.
 
 ### mcp.run
 - Submit at mcp.run → add listing
-- Use the SSE URL: `https://api.mcpmagic.io/sse`
+- Use the SSE URL: `https://api.govconmcp.com/sse`
 
 ---
 
@@ -98,7 +98,7 @@ docs are a mess. The semantic search is genuinely useful because contract titles
 
 Would appreciate any feedback from people who work in GovCon or have tried building with MCP.
 
-Link: mcpmagic.io
+Link: govconmcp.com
 ```
 
 ---
@@ -124,7 +124,7 @@ What it does:
 The goal was to make it feel like asking a colleague "find me active SDVOSB cybersecurity
 contracts at DoD above $500K" instead of clicking through SAM's interface.
 
-Free to try (20 searches/day + 14-day full access trial): mcpmagic.io
+Free to try (20 searches/day + 14-day full access trial): govconmcp.com
 
 Honest question: what would make this actually useful for your BD process? What do you spend
 the most time on that could be automated?
@@ -157,7 +157,7 @@ federal contracts intelligently:
 One question to get started: "Find me active SDVOSB cybersecurity contracts
 at DoD above $500K, deadline in 30 days"
 
-Free to try: mcpmagic.io
+Free to try: govconmcp.com
 
 Would love feedback from BD professionals — what's the most painful part of
 your opportunity pipeline?

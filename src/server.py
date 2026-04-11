@@ -1,5 +1,5 @@
 """
-MCP Magic — Government Contracts & Grants Intelligence
+GovCon MCP — Government Contracts & Grants Intelligence
 FastMCP server exposing 7 tools for AI agents to search federal opportunities.
 """
 
@@ -24,12 +24,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
-    name="MCP Magic — GovCon Intelligence",
+    name="GovCon MCP — Government Contract Intelligence",
     instructions=(
         "Search 75,000+ US federal contract and grant opportunities from SAM.gov, "
         "Grants.gov, and SBIR.gov. Analyze competitor awards via USASpending.gov. "
         "Authenticate by passing your API key as: api_key=<your-key> in tool calls. "
-        "Get a free key at mcpmagic.io."
+        "Get a free key at govconmcp.com."
     ),
 )
 
@@ -37,11 +37,11 @@ mcp = FastMCP(
 async def _resolve_user(api_key: str):
     """Resolve API key to user. Returns (user, error_message)."""
     if not api_key:
-        return None, "api_key is required. Get a free key at mcpmagic.io."
+        return None, "api_key is required. Get a free key at govconmcp.com."
     async with AsyncSessionLocal() as session:
         user = await get_user_by_api_key(api_key, session)
         if not user:
-            return None, "Invalid API key. Get a free key at mcpmagic.io."
+            return None, "Invalid API key. Get a free key at govconmcp.com."
         return user, None
 
 
@@ -67,7 +67,7 @@ async def search_opportunities_tool(
     """Search federal contract and grant opportunities across SAM.gov, Grants.gov, and SBIR.gov.
 
     Args:
-        api_key: Your MCP Magic API key (get one free at mcpmagic.io)
+        api_key: Your GovCon MCP API key (get one free at govconmcp.com)
         query: Free-text semantic search (e.g. "cybersecurity zero trust DoD")
         naics_codes: Filter by NAICS codes (e.g. ["541511", "541512"])
         set_aside_type: Filter by set-aside (e.g. "SB", "8a", "HUBZone", "SDVOSB", "WOSB")
@@ -120,7 +120,7 @@ async def get_opportunity_details(
     """Get full details of a specific opportunity including description, contacts, and attachments.
 
     Args:
-        api_key: Your MCP Magic API key
+        api_key: Your GovCon MCP API key
         opportunity_id: The opportunity's UUID (from search results) or source_id
 
     Returns:
@@ -169,7 +169,7 @@ async def get_solicitation_requirements(
     eligible entity types, clearance requirements, and period of performance.
 
     Args:
-        api_key: Your MCP Magic API key (Pro tier required)
+        api_key: Your GovCon MCP API key (Pro tier required)
         opportunity_id: UUID or source_id of the opportunity
 
     Returns:
@@ -238,7 +238,7 @@ async def match_to_profile(
     semantic similarity (20%).
 
     Args:
-        api_key: Your MCP Magic API key (Pro tier required)
+        api_key: Your GovCon MCP API key (Pro tier required)
         profile_id: Saved profile UUID, OR provide inline capabilities/naics/certs
         capabilities: e.g. ["penetration testing", "cloud migration", "FedRAMP"]
         naics_codes: e.g. ["541511", "541512"]
@@ -300,7 +300,7 @@ async def track_competitors(
     """Look up a company's federal contract award history from USASpending data.
 
     Args:
-        api_key: Your MCP Magic API key (Pro tier required)
+        api_key: Your GovCon MCP API key (Pro tier required)
         company_name: Company name (partial match)
         uei: Unique Entity Identifier (exact match, preferred over name)
         naics_code: Filter awards by NAICS code
@@ -420,7 +420,7 @@ async def search_past_awards(
     or "Who are the top contractors for NAICS 541511 at DHS?"
 
     Args:
-        api_key: Your MCP Magic API key
+        api_key: Your GovCon MCP API key
         agency: Filter by awarding agency (partial match)
         naics_code: Filter by NAICS code (exact)
         recipient_name: Filter by recipient company name (partial match)
@@ -520,7 +520,7 @@ async def get_notifications(
     Call this at the start of your session to catch up on what's new.
 
     Args:
-        api_key: Your MCP Magic API key (Pro tier required)
+        api_key: Your GovCon MCP API key (Pro tier required)
         profile_id: Your saved company profile UUID
         unread_only: Only return unread notifications (default True)
         limit: Max notifications to return (default 20)
@@ -608,7 +608,7 @@ async def save_profile(
     You can have up to 3 profiles on Pro, 20 on Agency.
 
     Args:
-        api_key: Your MCP Magic API key (Pro tier required)
+        api_key: Your GovCon MCP API key (Pro tier required)
         name: Company name (e.g. "Acme Cyber LLC")
         capabilities: List of capabilities (e.g. ["penetration testing", "cloud migration", "FedRAMP"])
         naics_codes: Your applicable NAICS codes (e.g. ["541511", "541512", "541519"])
@@ -710,7 +710,7 @@ async def list_profiles(api_key: str) -> dict:
     """List your saved company profiles.
 
     Args:
-        api_key: Your MCP Magic API key
+        api_key: Your GovCon MCP API key
 
     Returns:
         List of your saved profiles with their IDs

@@ -74,8 +74,8 @@ def create_app() -> FastAPI:
     main_app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            "https://mcpmagic.io",
-            "https://www.mcpmagic.io",
+            "https://govconmcp.com",
+            "https://www.govconmcp.com",
             "http://localhost:3000",
         ],
         allow_methods=["GET", "POST"],

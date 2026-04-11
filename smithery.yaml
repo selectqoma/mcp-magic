@@ -1,17 +1,17 @@
 name: mcp-magic-govcon
-displayName: "MCP Magic — Federal Contract Intelligence"
+displayName: "GovCon MCP — Federal Contract Intelligence"
 description: >
   Search 75,000+ US federal contract and grant opportunities from SAM.gov,
   Grants.gov, and SBIR.gov. Parse solicitation PDFs, score opportunities against
   your company profile, and track competitor award history via USASpending.gov.
 version: "1.0.0"
 license: "Proprietary"
-homepage: "https://mcpmagic.io"
+homepage: "https://govconmcp.com"
 repository: "https://github.com/selectqoma/mcp-magic"
-author: "MCP Magic"
+author: "GovCon MCP"
 
 transport: sse
-url: "https://api.mcpmagic.io/sse"
+url: "https://api.govconmcp.com/sse"
 
 categories:
   - business
@@ -60,11 +60,11 @@ config:
       "mcpServers": {
         "mcp-magic": {
           "command": "npx",
-          "args": ["-y", "mcp-remote", "https://api.mcpmagic.io/sse"],
+          "args": ["-y", "mcp-remote", "https://api.govconmcp.com/sse"],
           "env": {
             "MCP_API_KEY": "<your-api-key>"
           }
         }
       }
     }
-  get_api_key: "https://mcpmagic.io"
+  get_api_key: "https://govconmcp.com"

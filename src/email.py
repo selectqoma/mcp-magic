@@ -13,8 +13,8 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 
-FROM_ADDRESS = "MCP Magic <hello@mcpmagic.io>"
-REPLY_TO = "support@mcpmagic.io"
+FROM_ADDRESS = "GovCon MCP <hello@govconmcp.com>"
+REPLY_TO = "support@govconmcp.com"
 
 
 def _client():
@@ -43,8 +43,8 @@ async def send_welcome(email: str, api_key: str, trial_ends_at: str | None) -> N
     )
 
     mcp_config = (
-        '{"mcpServers":{"mcp-magic":{'
-        '"command":"npx","args":["-y","mcp-remote","https://api.mcpmagic.io/mcp/sse"],'
+        '{"mcpServers":{"govcon-mcp":{'
+        '"command":"npx","args":["-y","mcp-remote","https://api.govconmcp.com/mcp/sse"],'
         f'"env":{{"MCP_API_KEY":"{api_key}"}}'
         "}}}"
     )
@@ -53,7 +53,7 @@ async def send_welcome(email: str, api_key: str, trial_ends_at: str | None) -> N
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:sans-serif;max-width:600px;margin:40px auto;color:#1a1a1a">
-  <h1 style="font-size:24px;margin-bottom:4px">Welcome to MCP Magic 🎉</h1>
+  <h1 style="font-size:24px;margin-bottom:4px">Welcome to GovCon MCP 🎉</h1>
   <p style="color:#666;margin-top:0">Your API key is ready</p>
 
   <p>Here is your API key. Keep it safe — it grants full access to your account.</p>
@@ -74,15 +74,15 @@ async def send_welcome(email: str, api_key: str, trial_ends_at: str | None) -> N
   </ul>
 
   <p>
-    <a href="https://mcpmagic.io/docs" style="background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">
+    <a href="https://govconmcp.com/docs" style="background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">
       Read the Docs
     </a>
   </p>
 
   <hr style="border:none;border-top:1px solid #eee;margin:32px 0">
   <p style="color:#999;font-size:12px">
-    MCP Magic · GovCon Intelligence for AI Agents<br>
-    Questions? Reply to this email or visit <a href="https://mcpmagic.io">mcpmagic.io</a>
+    GovCon MCP · GovCon Intelligence for AI Agents<br>
+    Questions? Reply to this email or visit <a href="https://govconmcp.com">govconmcp.com</a>
   </p>
 </body>
 </html>"""
@@ -92,7 +92,7 @@ async def send_welcome(email: str, api_key: str, trial_ends_at: str | None) -> N
             "from": FROM_ADDRESS,
             "to": [email],
             "reply_to": REPLY_TO,
-            "subject": "Your MCP Magic API key",
+            "subject": "Your GovCon MCP API key",
             "html": html,
         })
         logger.info(f"Welcome email sent to {email}")
@@ -111,18 +111,18 @@ async def send_resend_api_key(email: str, api_key: str) -> None:
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:sans-serif;max-width:600px;margin:40px auto;color:#1a1a1a">
-  <h1 style="font-size:24px">Your MCP Magic API key</h1>
+  <h1 style="font-size:24px">Your GovCon MCP API key</h1>
   <p>You requested your API key. Here it is:</p>
   <pre style="background:#f4f4f4;border:1px solid #ddd;border-radius:6px;padding:16px;font-size:14px;word-break:break-all">{api_key}</pre>
 
   <p>
     Add it to your MCP config as <code>MCP_API_KEY</code>. See the
-    <a href="https://mcpmagic.io/docs">docs</a> for setup instructions.
+    <a href="https://govconmcp.com/docs">docs</a> for setup instructions.
   </p>
 
   <p style="color:#999;font-size:12px;margin-top:32px">
     Didn't request this? Your key is unchanged — no action needed.
-    Contact <a href="mailto:support@mcpmagic.io">support@mcpmagic.io</a> if you're concerned.
+    Contact <a href="mailto:support@govconmcp.com">support@govconmcp.com</a> if you're concerned.
   </p>
 </body>
 </html>"""
@@ -132,7 +132,7 @@ async def send_resend_api_key(email: str, api_key: str) -> None:
             "from": FROM_ADDRESS,
             "to": [email],
             "reply_to": REPLY_TO,
-            "subject": "Your MCP Magic API key",
+            "subject": "Your GovCon MCP API key",
             "html": html,
         })
         logger.info(f"API key re-sent to {email}")
@@ -158,7 +158,7 @@ async def send_payment_receipt(
 <head><meta charset="utf-8"></head>
 <body style="font-family:sans-serif;max-width:600px;margin:40px auto;color:#1a1a1a">
   <h1 style="font-size:24px">Payment confirmed ✓</h1>
-  <p>Thank you — your <strong>MCP Magic {tier_label}</strong> subscription is active.</p>
+  <p>Thank you — your <strong>GovCon MCP {tier_label}</strong> subscription is active.</p>
 
   <table style="width:100%;border-collapse:collapse;margin:24px 0">
     <tr style="border-bottom:1px solid #eee">
@@ -181,14 +181,14 @@ async def send_payment_receipt(
   </p>
 
   <p>
-    <a href="https://mcpmagic.io/docs" style="background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">
+    <a href="https://govconmcp.com/docs" style="background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">
       View Docs
     </a>
   </p>
 
   <p style="color:#999;font-size:12px;margin-top:32px">
-    Manage your subscription at <a href="https://mcpmagic.io/billing">mcpmagic.io/billing</a>.<br>
-    Questions? <a href="mailto:support@mcpmagic.io">support@mcpmagic.io</a>
+    Manage your subscription at <a href="https://govconmcp.com/billing">govconmcp.com/billing</a>.<br>
+    Questions? <a href="mailto:support@govconmcp.com">support@govconmcp.com</a>
   </p>
 </body>
 </html>"""
@@ -198,7 +198,7 @@ async def send_payment_receipt(
             "from": FROM_ADDRESS,
             "to": [email],
             "reply_to": REPLY_TO,
-            "subject": f"MCP Magic {tier_label} — payment confirmed",
+            "subject": f"GovCon MCP {tier_label} — payment confirmed",
             "html": html,
         })
         logger.info(f"Payment receipt sent to {email} ({tier})")
@@ -218,12 +218,12 @@ async def send_payment_failed(email: str, subscription_id: str) -> None:
 <body style="font-family:sans-serif;max-width:600px;margin:40px auto;color:#1a1a1a">
   <h1 style="font-size:24px">Action required: payment failed</h1>
   <p>
-    We couldn't process your MCP Magic subscription payment.
+    We couldn't process your GovCon MCP subscription payment.
     Your account has been temporarily downgraded to the free tier.
   </p>
 
   <p>
-    <a href="https://mcpmagic.io/billing" style="background:#dc2626;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">
+    <a href="https://govconmcp.com/billing" style="background:#dc2626;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block">
       Update Payment Method
     </a>
   </p>
@@ -232,7 +232,7 @@ async def send_payment_failed(email: str, subscription_id: str) -> None:
 
   <p style="color:#999;font-size:12px;margin-top:32px">
     Subscription ID: {subscription_id}<br>
-    Need help? <a href="mailto:support@mcpmagic.io">support@mcpmagic.io</a>
+    Need help? <a href="mailto:support@govconmcp.com">support@govconmcp.com</a>
   </p>
 </body>
 </html>"""
@@ -242,7 +242,7 @@ async def send_payment_failed(email: str, subscription_id: str) -> None:
             "from": FROM_ADDRESS,
             "to": [email],
             "reply_to": REPLY_TO,
-            "subject": "MCP Magic — payment failed, action required",
+            "subject": "GovCon MCP — payment failed, action required",
             "html": html,
         })
         logger.info(f"Payment failed email sent to {email}")

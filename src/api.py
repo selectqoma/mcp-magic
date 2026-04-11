@@ -18,7 +18,7 @@ from src.models.user import User
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="MCP Magic API", docs_url=None, redoc_url=None)
+app = FastAPI(title="GovCon MCP API", docs_url=None, redoc_url=None)
 
 # In-process rate limiters (IP-keyed, not Redis — single-worker only; see SETUP.md)
 _register_attempts: dict[str, list[datetime]] = defaultdict(list)
@@ -89,9 +89,9 @@ async def register(req: RegisterRequest, request: Request, background_tasks: Bac
         ),
         "mcp_config": {
             "mcpServers": {
-                "mcp-magic": {
+                "govcon-mcp": {
                     "command": "npx",
-                    "args": ["-y", "mcp-remote", "https://api.mcpmagic.io/mcp/sse"],
+                    "args": ["-y", "mcp-remote", "https://api.govconmcp.com/mcp/sse"],
                     "env": {"MCP_API_KEY": user.api_key},
                 }
             }
@@ -164,4 +164,4 @@ async def landing():
     try:
         return HTMLResponse(_LANDING_PATH.read_text())
     except FileNotFoundError:
-        return HTMLResponse("<h1>MCP Magic</h1><p>Coming soon.</p>")
+        return HTMLResponse("<h1>GovCon MCP</h1><p>Coming soon.</p>")

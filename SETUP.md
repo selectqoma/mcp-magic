@@ -15,7 +15,7 @@ Everything you need to fill in before the server runs. Check off as you go.
 | `PADDLE_WEBHOOK_SECRET` | Paddle dashboard → Notifications → Webhooks | ☐ (Week 3) |
 | `PADDLE_PRICE_ID_PRO` | Paddle dashboard → Catalog → Prices → copy the `pri_xxx` ID for Pro | ☐ (Week 3) |
 | `PADDLE_PRICE_ID_AGENCY` | Paddle dashboard → Catalog → Prices → copy the `pri_xxx` ID for Agency | ☐ (Week 3) |
-| `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys) — verify `mcpmagic.io` domain first | ☐ |
+| `RESEND_API_KEY` | [resend.com/api-keys](https://resend.com/api-keys) — verify `govconmcp.com` domain first | ☐ |
 | `SECRET_KEY` | Any long random string (`openssl rand -hex 32`) | ☐ |
 
 ---
@@ -24,7 +24,7 @@ Everything you need to fill in before the server runs. Check off as you go.
 
 | Task | Notes | Status |
 |------|-------|--------|
-| Register `mcpmagic.io` (or similar) | Namecheap, Cloudflare Registrar | ☐ |
+| Register `govconmcp.com` (or similar) | Namecheap, Cloudflare Registrar | ☐ |
 | Create Railway account | [railway.app](https://railway.app) | ☐ |
 | Deploy Postgres on Railway | Add PostgreSQL plugin, enable pgvector extension | ☐ |
 | Deploy server service on Railway | Point to this repo, set env vars | ☐ |
