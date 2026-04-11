@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,14 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/govcon"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def fix_async_driver(cls, v: str) -> str:
+        """Railway provides postgresql:// — rewrite to postgresql+asyncpg:// for SQLAlchemy async."""
+        if isinstance(v, str) and v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # API Keys
     sam_gov_api_key: str = ""
