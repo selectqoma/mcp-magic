@@ -1,7 +1,7 @@
 """SBIR/STTR opportunity sync.
 
 Uses the SBIR.gov API:
-  GET https://www.sbir.gov/api/solicitations.json
+  GET https://api.sbir.gov/solicitations
 """
 
 import logging
@@ -17,7 +17,7 @@ from src.models.opportunity import Opportunity
 
 logger = logging.getLogger(__name__)
 
-SBIR_BASE = "https://www.sbir.gov/api/solicitations.json"
+SBIR_BASE = "https://api.sbir.gov/solicitations"
 PAGE_SIZE = 50
 
 

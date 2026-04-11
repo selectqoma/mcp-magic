@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 async def run_notification_matching():
     """Check recently synced opportunities against all saved profiles."""
     async with AsyncSessionLocal() as session:
-        # Get opportunities synced in the last sync window (last 30 min)
-        cutoff = datetime.now(UTC) - timedelta(minutes=30)
+        # Get opportunities synced in the last 25 hours (covers a full 24hr sync cycle)
+        cutoff = datetime.now(UTC) - timedelta(hours=25)
         opps_result = await session.execute(
             select(Opportunity).where(Opportunity.created_at >= cutoff)
         )

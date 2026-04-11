@@ -9,7 +9,7 @@ Scoring breakdown:
 
 import logging
 
-from sqlalchemy import and_, or_, select, text
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.embeddings import embed_text

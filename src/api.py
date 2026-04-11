@@ -70,8 +70,7 @@ async def register(req: RegisterRequest, request: Request, background_tasks: Bac
         from sqlalchemy import select
         existing = await session.execute(select(User).where(User.email == req.email))
         if existing.scalar_one_or_none():
-            # Return generic message to avoid email enumeration
-            raise HTTPException(status_code=409, detail="An account with this email already exists.")
+            raise HTTPException(status_code=409, detail="An account with this email already exists. Use /resend-key to retrieve your API key.")
 
         user = await create_user(req.email, session)
 

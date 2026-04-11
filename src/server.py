@@ -9,7 +9,6 @@ from datetime import UTC, datetime, timedelta
 
 from fastmcp import FastMCP
 from sqlalchemy import and_, select
-from sqlalchemy import select as sa_select
 
 from src.auth import check_search_limit, get_user_by_api_key, requires_pro
 from src.db import AsyncSessionLocal
