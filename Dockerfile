@@ -7,7 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy sources first so pip install -e . can find the package
+# Upgrade pip and install build tools first
+RUN pip install --no-cache-dir --upgrade pip hatchling
+
+# Copy sources and install dependencies
 COPY . .
 RUN pip install --no-cache-dir .
 
