@@ -162,7 +162,7 @@ async def test_track_competitors_no_company(api_key):
 
 @pytest.mark.asyncio
 async def test_free_tier_rate_limit():
-    """After 20 searches, a free user with no trial should be blocked."""
+    """After 5 searches, a free user with no trial should be blocked."""
     import json
     from sqlalchemy import update as sa_update
     from src.db import AsyncSessionLocal
@@ -175,7 +175,7 @@ async def test_free_tier_rate_limit():
             pytest.skip("Rate limit test user exists — clear DB to re-run")
         key = resp.json()["api_key"]
 
-    # Null out the trial so the 20/day cap is active (new users get 14-day trial by default)
+    # Null out the trial so the 5/day cap is active (new users get 14-day trial by default)
     async with AsyncSessionLocal() as session:
         await session.execute(
             sa_update(User).where(User.api_key == key).values(trial_ends_at=None)
@@ -186,7 +186,7 @@ async def test_free_tier_rate_limit():
 
     async with Client(f"{BASE_URL}/mcp/sse") as client:
         # Exhaust the daily limit
-        for i in range(21):
+        for i in range(6):
             result = await client.call_tool("search_opportunities_tool", {
                 "api_key": key,
                 "query": f"test {i}",
@@ -194,7 +194,7 @@ async def test_free_tier_rate_limit():
             })
             data = json.loads(result[0].text)
             if "error" in data and "limit" in data["error"].lower():
-                assert i >= 20  # Should only hit limit after 20 searches
+                assert i >= 5  # Should only hit limit after 5 searches
                 return
 
-        pytest.fail("Rate limit was never triggered after 21 searches")
+        pytest.fail("Rate limit was never triggered after 6 searches")

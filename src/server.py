@@ -22,6 +22,14 @@ from src.services.search import _serialize, search_opportunities
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _truncate_list(lst: list | None, max_items: int, max_item_len: int) -> list | None:
+    """Cap a list to max_items, each item truncated to max_item_len chars."""
+    if lst is None:
+        return None
+    return [str(item)[:max_item_len] for item in lst[:max_items]]
+
+
 mcp = FastMCP(
     name="GovCon MCP — Government Contract Intelligence",
     instructions=(
@@ -37,6 +45,8 @@ async def _resolve_user(api_key: str):
     """Resolve API key to user. Returns (user, error_message)."""
     if not api_key:
         return None, "api_key is required. Get a free key at govconmcp.com."
+    if len(api_key) > 100:
+        return None, "Invalid API key. Get a free key at govconmcp.com."
     async with AsyncSessionLocal() as session:
         user = await get_user_by_api_key(api_key, session)
         if not user:
@@ -86,6 +96,17 @@ async def search_opportunities_tool(
     if err:
         return {"error": err}
 
+    # Input sanitization
+    query = query[:500]
+    offset = max(0, min(offset, 10000))
+    naics_codes = _truncate_list(naics_codes, 20, 10)
+    if set_aside_type is not None:
+        set_aside_type = set_aside_type[:100]
+    if agency is not None:
+        agency = agency[:100]
+    if source is not None:
+        source = source[:100]
+
     async with AsyncSessionLocal() as session:
         allowed, reason = await check_search_limit(user, session)
         if not allowed:
@@ -128,6 +149,9 @@ async def get_opportunity_details(
     user, err = await _resolve_user(api_key)
     if err:
         return {"error": err}
+
+    # Input sanitization
+    opportunity_id = opportunity_id[:255]
 
     async with AsyncSessionLocal() as session:
         opp = None
@@ -256,6 +280,13 @@ async def match_to_profile(
     if not ok:
         return {"error": reason}
 
+    # Input sanitization
+    capabilities = _truncate_list(capabilities, 50, 200)
+    naics_codes = _truncate_list(naics_codes, 20, 10)
+    certifications = _truncate_list(certifications, 20, 50)
+    past_agencies = _truncate_list(past_agencies, 20, 200)
+    min_score = max(0.0, min(1.0, min_score))
+
     async with AsyncSessionLocal() as session:
         profile = None
         if profile_id:
@@ -316,6 +347,17 @@ async def track_competitors(
     if not ok:
         return {"error": reason}
 
+    # Input sanitization
+    if company_name is not None:
+        company_name = company_name[:200]
+    if uei is not None:
+        uei = uei[:200]
+    if naics_code is not None:
+        naics_code = naics_code[:100]
+    if agency is not None:
+        agency = agency[:100]
+    years = max(1, min(10, years))
+
     if not company_name and not uei:
         return {"error": "Provide company_name or uei."}
 
@@ -333,7 +375,7 @@ async def track_competitors(
             filters.append(Award.agency.ilike(f"%{agency}%"))
 
         stmt = (
-            sa_select(Award)
+            select(Award)
             .where(and_(*filters))
             .order_by(Award.award_date.desc())
             .limit(200)
@@ -436,6 +478,14 @@ async def search_past_awards(
     if err:
         return {"error": err}
 
+    # Input sanitization
+    if agency is not None:
+        agency = agency[:200]
+    if recipient_name is not None:
+        recipient_name = recipient_name[:200]
+    if naics_code is not None:
+        naics_code = naics_code[:200]
+
     filters = []
     if agency:
         filters.append(Award.agency.ilike(f"%{agency}%"))
@@ -460,7 +510,7 @@ async def search_past_awards(
 
     async with AsyncSessionLocal() as session:
         stmt = (
-            sa_select(Award)
+            select(Award)
             .where(and_(*filters) if filters else Award.award_id.is_not(None))
             .order_by(Award.award_amount.desc().nulls_last())
             .limit(min(limit, 50))
@@ -542,7 +592,7 @@ async def get_notifications(
 
         # Verify the profile belongs to this user before returning notifications
         profile_check = await session.execute(
-            sa_select(CompanyProfile).where(
+            select(CompanyProfile).where(
                 CompanyProfile.id == profile_uid,
                 CompanyProfile.user_id == user.id,
             )
@@ -555,7 +605,7 @@ async def get_notifications(
             filters.append(Notification.read.is_(False))
 
         stmt = (
-            sa_select(Notification, Opportunity)
+            select(Notification, Opportunity)
             .join(Opportunity, Notification.opportunity_id == Opportunity.id)
             .where(and_(*filters))
             .order_by(Notification.matched_at.desc())
@@ -625,6 +675,15 @@ async def save_profile(
     ok, reason = requires_pro(user)
     if not ok:
         return {"error": reason}
+
+    # Input sanitization
+    name = name[:200]
+    if description is not None:
+        description = description[:2000]
+    capabilities = _truncate_list(capabilities, 50, 200)
+    naics_codes = _truncate_list(naics_codes, 20, 10)
+    certifications = _truncate_list(certifications, 20, 50)
+    past_agencies = _truncate_list(past_agencies, 50, 200)
 
     from src.models.user import TIER_LIMITS, UserTier
     # requires_pro already passed above, so user is either PRO/AGENCY or in trial.
