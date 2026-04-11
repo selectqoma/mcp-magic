@@ -90,7 +90,7 @@ async def register(req: RegisterRequest, request: Request, background_tasks: Bac
             "mcpServers": {
                 "govcon-mcp": {
                     "command": "npx",
-                    "args": ["-y", "mcp-remote", "https://api.govconmcp.com/mcp/sse"],
+                    "args": ["-y", "mcp-remote", "https://api.govconmcp.com/mcp/"],
                     "env": {"MCP_API_KEY": user.api_key},
                 }
             }

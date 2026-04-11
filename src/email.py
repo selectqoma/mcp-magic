@@ -44,7 +44,7 @@ async def send_welcome(email: str, api_key: str, trial_ends_at: str | None) -> N
 
     mcp_config = (
         '{"mcpServers":{"govcon-mcp":{'
-        '"command":"npx","args":["-y","mcp-remote","https://api.govconmcp.com/mcp/sse"],'
+        '"command":"npx","args":["-y","mcp-remote","https://api.govconmcp.com/mcp/"],'
         f'"env":{{"MCP_API_KEY":"{api_key}"}}'
         "}}}"
     )

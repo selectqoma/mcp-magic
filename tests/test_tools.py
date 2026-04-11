@@ -58,7 +58,7 @@ async def test_register_duplicate():
 async def test_search_no_key():
     """Missing API key should return an error, not crash."""
     from fastmcp import Client
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         result = await client.call_tool("search_opportunities_tool", {"api_key": ""})
         assert "error" in str(result).lower()
 
@@ -66,7 +66,7 @@ async def test_search_no_key():
 @pytest.mark.asyncio
 async def test_search_invalid_key():
     from fastmcp import Client
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         result = await client.call_tool("search_opportunities_tool", {"api_key": "invalid-key-xyz"})
         assert "error" in str(result).lower()
 
@@ -75,7 +75,7 @@ async def test_search_invalid_key():
 async def test_search_basic(api_key):
     """Basic search should return results dict (possibly empty if DB not seeded)."""
     from fastmcp import Client
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         result = await client.call_tool("search_opportunities_tool", {
             "api_key": api_key,
             "query": "cybersecurity",
@@ -92,7 +92,7 @@ async def test_search_basic(api_key):
 @pytest.mark.asyncio
 async def test_search_with_filters(api_key):
     from fastmcp import Client
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         result = await client.call_tool("search_opportunities_tool", {
             "api_key": api_key,
             "naics_codes": ["541511"],
@@ -108,7 +108,7 @@ async def test_search_with_filters(api_key):
 @pytest.mark.asyncio
 async def test_get_opportunity_not_found(api_key):
     from fastmcp import Client
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         result = await client.call_tool("get_opportunity_details", {
             "api_key": api_key,
             "opportunity_id": "00000000-0000-0000-0000-000000000000",
@@ -123,7 +123,7 @@ async def test_solicitation_requirements_requires_pro(api_key):
     """Free users (not in trial) should be blocked from PDF parsing."""
     # Note: free users get a 14-day trial so this might pass during trial
     from fastmcp import Client
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         result = await client.call_tool("get_solicitation_requirements", {
             "api_key": api_key,
             "opportunity_id": "00000000-0000-0000-0000-000000000000",
@@ -137,7 +137,7 @@ async def test_solicitation_requirements_requires_pro(api_key):
 @pytest.mark.asyncio
 async def test_search_past_awards_no_filters(api_key):
     from fastmcp import Client
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         result = await client.call_tool("search_past_awards", {
             "api_key": api_key,
             "limit": 5,
@@ -151,7 +151,7 @@ async def test_search_past_awards_no_filters(api_key):
 @pytest.mark.asyncio
 async def test_track_competitors_no_company(api_key):
     from fastmcp import Client
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         result = await client.call_tool("track_competitors", {
             "api_key": api_key,
         })
@@ -184,7 +184,7 @@ async def test_free_tier_rate_limit():
 
     from fastmcp import Client
 
-    async with Client(f"{BASE_URL}/mcp/sse") as client:
+    async with Client(f"{BASE_URL}/mcp/") as client:
         # Exhaust the daily limit
         for i in range(6):
             result = await client.call_tool("search_opportunities_tool", {
