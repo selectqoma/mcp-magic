@@ -35,11 +35,11 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     debug: bool = False
 
-    # Sync intervals (seconds)
-    sam_sync_interval: int = 21600      # 6 hrs — SAM.gov free key has tight rate limits
-    grants_sync_interval: int = 1800   # 30 min
-    sbir_sync_interval: int = 3600     # 1 hr
-    usaspending_sync_interval: int = 21600  # 6 hrs
+    # Sync intervals (seconds) — all sources update once daily at most
+    sam_sync_interval: int = 86400      # 24 hrs
+    grants_sync_interval: int = 86400   # 24 hrs
+    sbir_sync_interval: int = 86400     # 24 hrs
+    usaspending_sync_interval: int = 86400  # 24 hrs
 
     # Embedding model
     embedding_model: str = "text-embedding-3-small"
