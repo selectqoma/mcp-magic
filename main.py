@@ -9,10 +9,38 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import sqlalchemy as sa
+
 from src.sync.scheduler import create_scheduler, run_initial_sync
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
+
+
+async def ensure_tables():
+    """Guarantee all tables exist regardless of alembic state.
+
+    create_all is idempotent — it skips tables that already exist. This is
+    the safety net when alembic marks a migration as done but DDL was never
+    committed (async SQLAlchemy edge-case we've hit repeatedly in Railway).
+    """
+    import src.models  # noqa: F401 — registers all ORM models on Base.metadata
+    from src.db import Base, engine
+
+    try:
+        async with engine.begin() as conn:
+            # pgvector extension — needed for Vector(1536) column on opportunities
+            await conn.execute(sa.text("""
+                DO $$ BEGIN
+                    CREATE EXTENSION IF NOT EXISTS vector;
+                EXCEPTION WHEN OTHERS THEN NULL;
+                END $$;
+            """))
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("ensure_tables: all tables present.")
+    except Exception as e:
+        logger.error(f"ensure_tables failed: {e}", exc_info=True)
 
 _scheduler = None
 _initial_sync_done = False
@@ -45,6 +73,7 @@ async def lifespan(app: FastAPI):
                 logger.warning(f"Could not enter FastMCP lifespan: {e}")
 
         logger.info("Starting MCP Magic server...")
+        await ensure_tables()
         _scheduler = create_scheduler()
         _scheduler.start()
 
