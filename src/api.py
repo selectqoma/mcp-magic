@@ -83,7 +83,7 @@ async def register(req: RegisterRequest, request: Request, background_tasks: Bac
         "tier": user.tier,
         "trial_ends_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
         "message": (
-            "Welcome! Your free account includes 20 searches/day and a 14-day Pro trial. "
+            "Welcome! Your free account includes 5 searches/day and a 14-day Pro trial. "
             "Add this key to your MCP config to get started."
         ),
         "mcp_config": {

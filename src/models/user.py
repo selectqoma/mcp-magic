@@ -16,7 +16,7 @@ class UserTier(str, Enum):
 
 
 TIER_LIMITS = {
-    UserTier.FREE: {"searches_per_day": 20, "profiles": 0, "pdf_parsing": False, "competitors": False},
+    UserTier.FREE: {"searches_per_day": 5, "profiles": 0, "pdf_parsing": False, "competitors": False},
     UserTier.PRO: {"searches_per_day": -1, "profiles": 3, "pdf_parsing": True, "competitors": True},
     UserTier.AGENCY: {"searches_per_day": -1, "profiles": 20, "pdf_parsing": True, "competitors": True},
 }
