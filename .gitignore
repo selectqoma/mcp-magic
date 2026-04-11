@@ -1,4 +1,6 @@
 .env
+keys
+secrets
 __pycache__/
 *.pyc
 *.pyo
