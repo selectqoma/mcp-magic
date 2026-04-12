@@ -82,7 +82,7 @@ async def search_opportunities(
             select(Opportunity)
             .where(semantic_filter)
             .order_by(
-                text("embedding <=> :q_vec::vector").bindparams(q_vec=emb_str)
+                text("embedding <=> CAST(:q_vec AS vector)").bindparams(q_vec=emb_str)
             )
             .limit(limit)
             .offset(offset)
