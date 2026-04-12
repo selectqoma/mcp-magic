@@ -9,6 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.embeddings import embed_text
 from src.models.opportunity import Opportunity
 
+# Cosine distance threshold for semantic search (lower = more similar).
+# 0.45 ≈ similarity score of 0.55 — keeps clearly relevant results, cuts noise.
+SIMILARITY_THRESHOLD = 0.50
+
 
 async def search_opportunities(
     session: AsyncSession,
@@ -74,20 +78,24 @@ async def search_opportunities(
     where_clause = and_(*filters) if filters else text("true")
 
     if query:
-        # Semantic search: order by cosine similarity using bound parameter (not string interpolation)
+        # Semantic search: filter + order by cosine distance, threshold cuts irrelevant results
         embedding = await embed_text(query)
         emb_str = f"[{','.join(str(x) for x in embedding)}]"
-        semantic_filter = and_(where_clause, Opportunity.embedding.is_not(None))
+        distance_expr = text("embedding <=> CAST(:q_vec AS vector)").bindparams(q_vec=emb_str)
+        semantic_filter = and_(
+            where_clause,
+            Opportunity.embedding.is_not(None),
+            text("embedding <=> CAST(:q_vec2 AS vector) < :threshold").bindparams(
+                q_vec2=emb_str, threshold=SIMILARITY_THRESHOLD
+            ),
+        )
         stmt = (
             select(Opportunity)
             .where(semantic_filter)
-            .order_by(
-                text("embedding <=> CAST(:q_vec AS vector)").bindparams(q_vec=emb_str)
-            )
+            .order_by(distance_expr)
             .limit(limit)
             .offset(offset)
         )
-        # Count uses same filter set (including embedding not-null)
         count_stmt = select(func.count()).select_from(Opportunity).where(semantic_filter)
     else:
         stmt = (
