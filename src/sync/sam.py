@@ -9,7 +9,9 @@ Register for an API key at: https://sam.gov/profile/details
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime, timedelta
+from html.parser import HTMLParser
 
 import httpx
 from sqlalchemy import select
@@ -24,6 +26,43 @@ logger = logging.getLogger(__name__)
 
 SAM_BASE = "https://api.sam.gov/opportunities/v2/search"
 PAGE_SIZE = 100
+_DESC_SEMAPHORE = asyncio.Semaphore(5)
+
+
+class _HTMLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self._parts.append(data)
+
+    def get_text(self) -> str:
+        return " ".join(self._parts).strip()
+
+
+def _strip_html(html: str) -> str:
+    p = _HTMLStripper()
+    p.feed(html)
+    text = p.get_text()
+    # Collapse whitespace
+    return re.sub(r"\s+", " ", text).strip()
+
+
+async def _fetch_description(client: httpx.AsyncClient, url: str) -> str:
+    """Fetch SAM.gov notice description HTML and return as plain text."""
+    async with _DESC_SEMAPHORE:
+        try:
+            resp = await client.get(
+                url,
+                params={"api_key": settings.sam_gov_api_key},
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                return _strip_html(resp.text)[:3000]
+        except Exception as e:
+            logger.debug(f"Failed to fetch SAM description from {url}: {e}")
+    return ""
 
 
 def _parse_opportunity(item: dict) -> dict:
@@ -100,6 +139,10 @@ def _parse_attachments(links: list) -> list:
     return [{"filename": str(i), "url": link, "parsed": False} for i, link in enumerate(links)]
 
 
+async def _noop() -> str:
+    return ""
+
+
 async def sync_sam_opportunities() -> int:
     """Fetch recent SAM.gov opportunities and upsert into DB. Returns count ingested."""
     if not settings.sam_gov_api_key:
@@ -140,8 +183,31 @@ async def sync_sam_opportunities() -> int:
 
             parsed = [_parse_opportunity(item) for item in items]
 
-            # Generate embeddings for items without one
-            texts = [f"{p['title']} {p['description'] or ''}" for p in parsed]
+            # Fetch real description text for items where SAM returned a URL
+            async def _noop() -> str:
+                return ""
+
+            desc_tasks = [
+                _fetch_description(client, p["description"])
+                if (p.get("description") or "").startswith("http")
+                else _noop()  # description already plain text or empty
+                for p in parsed
+            ]
+            fetched_descs = await asyncio.gather(*desc_tasks, return_exceptions=True)
+            for p, fetched in zip(parsed, fetched_descs):
+                if isinstance(fetched, str) and fetched:
+                    p["description"] = fetched
+
+            # Generate embeddings — use title + description + agency + set_aside for richer signal
+            texts = [
+                " ".join(filter(None, [
+                    p["title"],
+                    p.get("description") or "",
+                    p.get("agency") or "",
+                    p.get("set_aside_type") or "",
+                ]))
+                for p in parsed
+            ]
             try:
                 embeddings = await embed_batch(texts)
             except Exception as e:

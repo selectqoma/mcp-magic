@@ -89,7 +89,14 @@ async def sync_grants_opportunities() -> int:
 
             parsed = [_parse_grant(item) for item in items]
 
-            texts = [f"{p['title']} {p['description'] or ''}" for p in parsed]
+            texts = [
+                " ".join(filter(None, [
+                    p["title"],
+                    p.get("description") or "",
+                    p.get("agency") or "",
+                ]))
+                for p in parsed
+            ]
             try:
                 embeddings = await embed_batch(texts)
             except Exception as e:
