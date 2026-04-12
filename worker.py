@@ -19,7 +19,7 @@ async def main():
     if len(sys.argv) > 1 and sys.argv[1] == "backfill":
         logger.info("Running SAM.gov backfill (1 year, 7-day chunks)...")
         from src.sync.sam import backfill_sam_opportunities
-        total = await backfill_sam_opportunities(days_back=365, chunk_days=7)
+        total = await backfill_sam_opportunities(days_back=90, chunk_days=7)
         logger.info(f"Backfill complete: {total} total opportunities ingested")
         return
 
