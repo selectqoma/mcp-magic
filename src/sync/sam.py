@@ -106,10 +106,17 @@ def _parse_naics(notice: dict) -> list[str]:
 def _parse_date(val: str | None) -> datetime | None:
     if not val:
         return None
-    # Try each format against the full value, not a truncated format string
-    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y"):
+    # Map format → expected output length (format string length ≠ output length)
+    _FMT_LENS = {
+        "%Y-%m-%dT%H:%M:%S%z": 25,
+        "%Y-%m-%dT%H:%M:%S": 19,
+        "%Y-%m-%d %H:%M:%S": 19,
+        "%Y-%m-%d": 10,
+        "%m/%d/%Y": 10,
+    }
+    for fmt, flen in _FMT_LENS.items():
         try:
-            parsed = datetime.strptime(val[:len(fmt)], fmt)
+            parsed = datetime.strptime(val[:flen], fmt)
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=UTC)
             return parsed
@@ -143,16 +150,8 @@ async def _noop() -> str:
     return ""
 
 
-async def sync_sam_opportunities() -> int:
-    """Fetch recent SAM.gov opportunities and upsert into DB. Returns count ingested."""
-    if not settings.sam_gov_api_key:
-        logger.warning("SAM_GOV_API_KEY not set, skipping sync")
-        return 0
-
-    # Fetch opportunities posted in the last 2 days to stay current
-    posted_from = (datetime.now(UTC) - timedelta(days=2)).strftime("%m/%d/%Y")
-    posted_to = datetime.now(UTC).strftime("%m/%d/%Y")
-
+async def _sync_date_range(client: httpx.AsyncClient, posted_from: str, posted_to: str) -> int:
+    """Fetch and upsert all SAM.gov opportunities in a date range. Returns count ingested."""
     params = {
         "api_key": settings.sam_gov_api_key,
         "postedFrom": posted_from,
@@ -160,81 +159,127 @@ async def sync_sam_opportunities() -> int:
         "limit": PAGE_SIZE,
         "offset": 0,
     }
-
     ingested = 0
-    async with httpx.AsyncClient(timeout=30) as client:
-        while True:
-            try:
-                resp = await client.get(SAM_BASE, params=params)
-                if resp.status_code == 429:
-                    retry_after = int(resp.headers.get("Retry-After", 60))
-                    logger.warning(f"SAM.gov rate limited, waiting {retry_after}s")
-                    await asyncio.sleep(retry_after)
+
+    while True:
+        try:
+            resp = await client.get(SAM_BASE, params=params)
+            if resp.status_code == 429:
+                retry_after = int(resp.headers.get("Retry-After", 60))
+                logger.warning(f"SAM.gov rate limited, waiting {retry_after}s")
+                await asyncio.sleep(retry_after)
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logger.error(f"SAM.gov API error: {e}")
+            break
+
+        items = data.get("opportunitiesData") or []
+        if not items:
+            break
+
+        parsed = [_parse_opportunity(item) for item in items]
+
+        # Fetch real description text for items where SAM returned a URL
+        desc_tasks = [
+            _fetch_description(client, p["description"])
+            if (p.get("description") or "").startswith("http")
+            else _noop()  # description already plain text or empty
+            for p in parsed
+        ]
+        fetched_descs = await asyncio.gather(*desc_tasks, return_exceptions=True)
+        for p, fetched in zip(parsed, fetched_descs):
+            if isinstance(fetched, str) and fetched:
+                p["description"] = fetched
+
+        # Generate embeddings — title + description + agency + set_aside for richer signal
+        texts = [
+            " ".join(filter(None, [
+                p["title"],
+                p.get("description") or "",
+                p.get("agency") or "",
+                p.get("set_aside_type") or "",
+            ]))
+            for p in parsed
+        ]
+        try:
+            embeddings = await embed_batch(texts)
+        except Exception as e:
+            logger.warning(f"Embedding failed: {e}")
+            embeddings = [None] * len(parsed)
+
+        for p, emb in zip(parsed, embeddings):
+            p["embedding"] = emb
+
+        async with AsyncSessionLocal() as session:
+            for p in parsed:
+                if not p["source_id"]:
                     continue
-                resp.raise_for_status()
-                data = resp.json()
-            except Exception as e:
-                logger.error(f"SAM.gov API error: {e}")
-                break
-
-            items = data.get("opportunitiesData") or []
-            if not items:
-                break
-
-            parsed = [_parse_opportunity(item) for item in items]
-
-            # Fetch real description text for items where SAM returned a URL
-            desc_tasks = [
-                _fetch_description(client, p["description"])
-                if (p.get("description") or "").startswith("http")
-                else _noop()  # description already plain text or empty
-                for p in parsed
-            ]
-            fetched_descs = await asyncio.gather(*desc_tasks, return_exceptions=True)
-            for p, fetched in zip(parsed, fetched_descs):
-                if isinstance(fetched, str) and fetched:
-                    p["description"] = fetched
-
-            # Generate embeddings — use title + description + agency + set_aside for richer signal
-            texts = [
-                " ".join(filter(None, [
-                    p["title"],
-                    p.get("description") or "",
-                    p.get("agency") or "",
-                    p.get("set_aside_type") or "",
-                ]))
-                for p in parsed
-            ]
-            try:
-                embeddings = await embed_batch(texts)
-            except Exception as e:
-                logger.warning(f"Embedding failed: {e}")
-                embeddings = [None] * len(parsed)
-
-            for p, emb in zip(parsed, embeddings):
-                p["embedding"] = emb
-
-            async with AsyncSessionLocal() as session:
-                for p in parsed:
-                    if not p["source_id"]:
-                        continue
-                    stmt = (
-                        insert(Opportunity)
-                        .values(**p)
-                        .on_conflict_do_update(
-                            index_elements=["source_id"],
-                            set_={k: v for k, v in p.items() if k != "source_id"},
-                        )
+                stmt = (
+                    insert(Opportunity)
+                    .values(**p)
+                    .on_conflict_do_update(
+                        index_elements=["source_id"],
+                        set_={k: v for k, v in p.items() if k != "source_id"},
                     )
-                    await session.execute(stmt)
-                await session.commit()
+                )
+                await session.execute(stmt)
+            await session.commit()
 
-            ingested += len(parsed)
-            total = data.get("totalRecords") or 0
-            params["offset"] += PAGE_SIZE
+        ingested += len(parsed)
+        total = data.get("totalRecords") or 0
+        params["offset"] += PAGE_SIZE
 
-            if params["offset"] >= total or params["offset"] >= 10000:
-                break
+        if params["offset"] >= total or params["offset"] >= 10000:
+            break
+
+    return ingested
+
+
+async def sync_sam_opportunities() -> int:
+    """Fetch recent SAM.gov opportunities (last 2 days) and upsert. Returns count ingested."""
+    if not settings.sam_gov_api_key:
+        logger.warning("SAM_GOV_API_KEY not set, skipping sync")
+        return 0
+
+    posted_from = (datetime.now(UTC) - timedelta(days=2)).strftime("%m/%d/%Y")
+    posted_to = datetime.now(UTC).strftime("%m/%d/%Y")
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        ingested = await _sync_date_range(client, posted_from, posted_to)
 
     logger.info(f"SAM.gov sync complete: {ingested} opportunities ingested")
     return ingested
+
+
+async def backfill_sam_opportunities(days_back: int = 365, chunk_days: int = 7) -> int:
+    """Backfill SAM.gov opportunities going back `days_back` days in `chunk_days` chunks.
+
+    SAM.gov caps results at 10,000 per query, so we use narrow date windows.
+    Call once manually to populate the database with historical data.
+    """
+    if not settings.sam_gov_api_key:
+        logger.warning("SAM_GOV_API_KEY not set, skipping backfill")
+        return 0
+
+    total_ingested = 0
+    now = datetime.now(UTC)
+    # Start from oldest and work forward, skipping the last 2 days (covered by regular sync)
+    start = now - timedelta(days=days_back)
+    end = now - timedelta(days=2)
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        cursor = start
+        while cursor < end:
+            chunk_end = min(cursor + timedelta(days=chunk_days), end)
+            pf = cursor.strftime("%m/%d/%Y")
+            pt = chunk_end.strftime("%m/%d/%Y")
+            logger.info(f"Backfill: {pf} → {pt}")
+            count = await _sync_date_range(client, pf, pt)
+            total_ingested += count
+            logger.info(f"  ingested {count} (total so far: {total_ingested})")
+            cursor = chunk_end + timedelta(days=1)
+
+    logger.info(f"SAM.gov backfill complete: {total_ingested} total opportunities ingested")
+    return total_ingested
