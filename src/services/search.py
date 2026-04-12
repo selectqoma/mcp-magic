@@ -11,7 +11,7 @@ from src.models.opportunity import Opportunity
 
 # Cosine distance threshold for semantic search (lower = more similar).
 # 0.45 ≈ similarity score of 0.55 — keeps clearly relevant results, cuts noise.
-SIMILARITY_THRESHOLD = 0.50
+SIMILARITY_THRESHOLD = 0.65
 
 
 async def search_opportunities(
