@@ -153,6 +153,20 @@ async def paddle_webhook(request: Request):
     return Response(status_code=200)
 
 
+# ── Admin: trigger backfill ────────────────────────────────────────────────────
+
+@app.post("/admin/backfill")
+async def admin_backfill(request: Request, background_tasks: BackgroundTasks):
+    """Trigger SAM.gov backfill (last 90 days). Protected by ADMIN_SECRET env var."""
+    from src.config import settings
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not secret or secret != getattr(settings, "admin_secret", None):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from src.sync.sam import backfill_sam_opportunities
+    background_tasks.add_task(backfill_sam_opportunities, days_back=90, chunk_days=7)
+    return {"message": "Backfill started in background (90 days, 7-day chunks)"}
+
+
 # ── Static landing page ────────────────────────────────────────────────────────
 
 _LANDING_PATH = Path(__file__).parent.parent / "landing" / "index.html"

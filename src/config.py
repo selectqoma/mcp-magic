@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     # App
     secret_key: str = "change-me-in-production"
+    admin_secret: str = ""
     debug: bool = False
 
     # Sync intervals (seconds) — all sources update once daily at most
