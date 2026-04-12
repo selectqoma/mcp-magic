@@ -184,9 +184,6 @@ async def sync_sam_opportunities() -> int:
             parsed = [_parse_opportunity(item) for item in items]
 
             # Fetch real description text for items where SAM returned a URL
-            async def _noop() -> str:
-                return ""
-
             desc_tasks = [
                 _fetch_description(client, p["description"])
                 if (p.get("description") or "").startswith("http")
