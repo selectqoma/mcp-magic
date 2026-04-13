@@ -172,9 +172,6 @@ async def admin_sam_debug(noticeid: str, request: Request):
     """Test SAM API description fetch for a given noticeid."""
     import httpx
     from src.config import settings
-    secret = request.headers.get("X-Admin-Secret", "")
-    if not secret or secret != getattr(settings, "admin_secret", None):
-        raise HTTPException(status_code=403, detail="Forbidden")
     key = settings.sam_gov_api_key
     url = f"https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid={noticeid}"
     results = {}
