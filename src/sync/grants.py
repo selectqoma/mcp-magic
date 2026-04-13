@@ -5,13 +5,13 @@ Uses the Grants.gov REST API v2:
   Docs: https://www.grants.gov/api-reference
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
 import httpx
 from sqlalchemy.dialects.postgresql import insert
 
-from src.config import settings
 from src.db import AsyncSessionLocal
 from src.embeddings import embed_batch
 from src.models.opportunity import Opportunity
@@ -19,7 +19,29 @@ from src.models.opportunity import Opportunity
 logger = logging.getLogger(__name__)
 
 GRANTS_BASE = "https://apply07.grants.gov/grantsws/rest/opportunities/search/"
+GRANTS_DETAIL_URL = "https://apply07.grants.gov/grantsws/rest/opportunity/details"
 PAGE_SIZE = 100
+_DETAIL_SEMAPHORE = asyncio.Semaphore(15)
+
+
+async def _fetch_grant_description(client: httpx.AsyncClient, source_id: str) -> tuple[str, str]:
+    """Fetch synopsis from the Grants.gov detail endpoint. Returns (source_id, description)."""
+    numeric_id = source_id.removeprefix("GRANTS-")
+    async with _DETAIL_SEMAPHORE:
+        try:
+            resp = await client.get(GRANTS_DETAIL_URL, params={"oppId": numeric_id}, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            # Response shape: {"synopsis": {"synopsisDesc": "..."}} or {"synopsis": "..."}
+            synopsis = data.get("synopsis") or {}
+            if isinstance(synopsis, dict):
+                text = synopsis.get("synopsisDesc", "") or ""
+            else:
+                text = str(synopsis)
+            return source_id, text.strip()
+        except Exception as e:
+            logger.debug("Failed to fetch detail for %s: %s", source_id, e)
+            return source_id, ""
 
 
 def _parse_grant(item: dict) -> dict:
@@ -88,6 +110,17 @@ async def sync_grants_opportunities() -> int:
                 break
 
             parsed = [_parse_grant(item) for item in items]
+
+            # Fetch descriptions for grants that have none (search API doesn't include synopsis)
+            needs_desc = [p for p in parsed if not p.get("description")]
+            if needs_desc:
+                desc_tasks = [_fetch_grant_description(client, p["source_id"]) for p in needs_desc]
+                desc_results = await asyncio.gather(*desc_tasks, return_exceptions=True)
+                desc_map = {sid: desc for sid, desc in desc_results if isinstance(desc, str) and desc}
+                for p in parsed:
+                    if not p.get("description") and p["source_id"] in desc_map:
+                        p["description"] = desc_map[p["source_id"]]
+                logger.info("Grants.gov: fetched descriptions for %d/%d grants", len(desc_map), len(needs_desc))
 
             texts = [
                 " ".join(filter(None, [
