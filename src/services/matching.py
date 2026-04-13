@@ -1,10 +1,14 @@
 """Profile-to-opportunity matching service.
 
 Scoring breakdown:
-  - Keyword overlap (40%): do the company's capabilities appear in the opportunity?
-  - NAICS match (20%): do NAICS codes overlap?
-  - Set-aside eligibility (20%): does the company hold the required certification?
+  - Keyword overlap (45%): do the company's capabilities appear in the opportunity?
+  - NAICS match (25%): do NAICS codes overlap?
   - Semantic similarity (20%): cosine similarity between profile embedding and opportunity
+  - Set-aside eligibility (10%): does the company hold the required certification?
+
+Set-aside weight is intentionally low (10%) — it's a pass/fail gate, not a relevance signal.
+Keeping it low prevents certified companies from seeing irrelevant opps just because they're
+eligible. Keyword + NAICS (70% combined) must drive the match.
 """
 
 import logging
@@ -119,9 +123,9 @@ def _score_opportunity(
     semantic_score = _semantic_score(opp, profile_embedding)
 
     total = (
-        keyword_score * 0.40
-        + naics_score * 0.20
-        + setaside_score * 0.20
+        keyword_score * 0.45
+        + naics_score * 0.25
+        + setaside_score * 0.10
         + semantic_score * 0.20
     )
 

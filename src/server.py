@@ -468,6 +468,17 @@ async def get_solicitation_requirements(
         if not pdf_url:
             return {"error": "No downloadable attachments found for this opportunity."}
 
+        # SAM attachment URLs require ?api_key= to download (they redirect to S3 pre-signed URLs).
+        # Append the API key so the download doesn't return a 403 HTML error page.
+        if (
+            opp.source == "sam"
+            and "sam.gov" in pdf_url
+            and settings.sam_gov_api_key
+            and "api_key" not in pdf_url
+        ):
+            sep = "&" if "?" in pdf_url else "?"
+            pdf_url = f"{pdf_url}{sep}api_key={settings.sam_gov_api_key}"
+
         requirements = await parse_solicitation_pdf(pdf_url)
         opp.requirements = requirements
         await session.commit()
