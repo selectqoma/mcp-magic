@@ -123,7 +123,39 @@ async def search_opportunities(
     }
 
 
+def _extract_date_from_raw(raw: dict | None, *field_names: str):
+    """Pull a datetime from raw_data fields when the DB column is null."""
+    if not raw:
+        return None
+    notice = raw.get("notice") or raw
+    for field in field_names:
+        val = notice.get(field)
+        if val:
+            from src.sync.sam import _parse_date as _sam_parse_date
+            try:
+                return _sam_parse_date(str(val))
+            except Exception:
+                pass
+    return None
+
+
 def _serialize(o: Opportunity) -> dict:
+    posted_date = o.posted_date
+    response_deadline = o.response_deadline
+
+    # Fall back to raw_data for null dates (backfill SAM records often have dates only there)
+    if o.source == "sam" and o.raw_data:
+        if not posted_date:
+            posted_date = _extract_date_from_raw(o.raw_data, "postedDate", "publishedDate")
+        if not response_deadline:
+            response_deadline = _extract_date_from_raw(o.raw_data, "responseDeadLine", "archiveDate")
+
+    # has_parsed_requirements is true only when requirements parsed successfully (not error)
+    has_parsed = (
+        o.requirements is not None
+        and not (isinstance(o.requirements, dict) and "error" in o.requirements)
+    )
+
     return {
         "id": str(o.id),
         "source_id": o.source_id,
@@ -132,12 +164,12 @@ def _serialize(o: Opportunity) -> dict:
         "agency": o.agency,
         "naics_codes": o.naics_codes,
         "set_aside_type": o.set_aside_type,
-        "posted_date": o.posted_date.isoformat() if o.posted_date else None,
-        "deadline": o.response_deadline.isoformat() if o.response_deadline else None,
+        "posted_date": posted_date.isoformat() if posted_date else None,
+        "deadline": response_deadline.isoformat() if response_deadline else None,
         "estimated_value_low": float(o.estimated_value_low) if o.estimated_value_low else None,
         "estimated_value_high": float(o.estimated_value_high) if o.estimated_value_high else None,
         "place_of_performance": o.place_of_performance,
         "contact_info": o.contact_info,
         "attachments": o.attachments or [],
-        "has_parsed_requirements": o.requirements is not None,
+        "has_parsed_requirements": has_parsed,
     }

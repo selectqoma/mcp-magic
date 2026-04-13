@@ -68,6 +68,18 @@ def _strip_html_text(html: str) -> str:
     return s.text()[:3000]
 
 
+def _clean_description(text: str | None) -> str | None:
+    """Strip Microsoft Word HTML artifact classes and normalize whitespace."""
+    if not text:
+        return text
+    # Remove Word markup spans: <span class="SCXW..."> etc.
+    cleaned = re.sub(r'<span[^>]*class="[^"]*(?:SCXW|BCX|WACLine)[^"]*"[^>]*>', "", text)
+    cleaned = re.sub(r'</span>', "", cleaned)
+    # Collapse excessive whitespace
+    cleaned = re.sub(r"\s{3,}", "\n\n", cleaned)
+    return cleaned.strip() or None
+
+
 def _extract_desc_from_sam_response(data: dict) -> str:
     """Pull plain-text description from a SAM v2/v3 opportunity response dict."""
     items = data.get("opportunitiesData") or data.get("opportunities") or []
@@ -105,18 +117,32 @@ async def _fetch_description_for_url(url: str) -> str:
                     text = _extract_desc_from_sam_response(r.json())
                     if text:
                         return text[:3000]
+                    # If v2 search returns a URL desc, try fetching that URL too
+                    items = r.json().get("opportunitiesData") or []
+                    if items:
+                        notice = items[0].get("notice") or items[0]
+                        inner_url = notice.get("description") or ""
+                        if inner_url.startswith("http"):
+                            ir = await client.get(inner_url, params={"api_key": key})
+                            if ir.status_code == 200 and len(ir.text) > 50:
+                                return _strip_html_text(ir.text)[:3000]
 
-                # Try SAM v3 direct opportunity lookup
-                r = await client.get(
+                # Try SAM v2 noticedesc (different path from v1)
+                for path in [
+                    f"https://api.sam.gov/prod/opportunities/v2/noticedesc",
                     f"https://api.sam.gov/prod/opps/v3/opportunities/{noticeid}",
-                    params={"api_key": key},
-                )
-                if r.status_code == 200:
-                    data = r.json()
-                    notice = data.get("notice") or data
-                    desc = notice.get("description") or notice.get("synopsis", "") or ""
-                    if desc and not desc.startswith("http"):
-                        return _strip_html_text(desc)[:3000]
+                ]:
+                    r = await client.get(path, params={"api_key": key, "noticeid": noticeid})
+                    if r.status_code == 200 and len(r.text) > 50:
+                        ct = r.headers.get("content-type", "")
+                        if "json" in ct:
+                            data = r.json()
+                            notice = data.get("notice") or data
+                            desc = notice.get("description") or notice.get("synopsis", "") or ""
+                            if desc and not desc.startswith("http"):
+                                return _strip_html_text(desc)[:3000]
+                        else:
+                            return _strip_html_text(r.text)[:3000]
 
             # Fallback: try the original URL directly with auth
             r = await client.get(url, params={"api_key": key})
@@ -370,7 +396,7 @@ async def get_opportunity_details(
                     description = None
 
         data = _serialize(opp)
-        data["description"] = description
+        data["description"] = _clean_description(description)
         data["sam_gov_url"] = sam_gov_url
         data["requirements"] = opp.requirements
         data["attachments"] = await _enrich_attachments(opp.attachments or [], opp.source, opp.source_id)
