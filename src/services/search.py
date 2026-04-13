@@ -78,6 +78,10 @@ async def search_opportunities(
     where_clause = and_(*filters) if filters else text("true")
 
     if query:
+        # IVFFlat index with 100 lists needs higher probes for small datasets.
+        # probes=50 means we search 50% of clusters — much better recall at cost of speed.
+        await session.execute(text("SET LOCAL ivfflat.probes = 50"))
+
         # Semantic search: filter + order by cosine distance, threshold cuts irrelevant results
         embedding = await embed_text(query)
         emb_str = f"[{','.join(str(x) for x in embedding)}]"
