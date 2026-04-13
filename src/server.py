@@ -758,16 +758,33 @@ async def search_past_awards(
             )
         )
     if agency:
-        # USASpending uses abbreviated agency names (e.g. "DEPT OF DEFENSE" not "Department of Defense").
-        # Match on individual significant words so partial/abbreviated names work.
-        # Also search sub_agency since many contracts land under a component.
-        words = [w for w in agency.split() if len(w) >= 3]
+        # Common acronym → full name expansion
+        _ACRONYMS = {
+            "nasa": "National Aeronautics and Space Administration",
+            "dod": "Department of Defense", "dhs": "Department of Homeland Security",
+            "doe": "Department of Energy", "hhs": "Department of Health and Human Services",
+            "doj": "Department of Justice", "dot": "Department of Transportation",
+            "usda": "Department of Agriculture", "va": "Department of Veterans Affairs",
+            "epa": "Environmental Protection Agency", "gsa": "General Services Administration",
+            "sba": "Small Business Administration", "nih": "National Institutes of Health",
+            "nsf": "National Science Foundation", "darpa": "Defense Advanced Research Projects Agency",
+            "dla": "Defense Logistics Agency", "fema": "Federal Emergency Management Agency",
+            "tsa": "Transportation Security Administration", "cia": "Central Intelligence Agency",
+        }
+        # Stop words that match too many agencies
+        _STOP = {"department", "national", "administration", "services", "agency",
+                 "federal", "united", "states", "government", "bureau", "office",
+                 "the", "and", "of", "for"}
+        expanded = _ACRONYMS.get(agency.lower().strip(), agency)
+        # AND-match all significant words — prevents "Department" from matching every agency
+        words = [w for w in expanded.split() if len(w) >= 3 and w.lower() not in _STOP]
         if words:
-            word_conditions = [
-                _or(Award.agency.ilike(f"%{w}%"), Award.sub_agency.ilike(f"%{w}%"))
-                for w in words
-            ]
-            filters.append(_or(*word_conditions))
+            filters.append(
+                and_(*(
+                    _or(Award.agency.ilike(f"%{w}%"), Award.sub_agency.ilike(f"%{w}%"))
+                    for w in words
+                ))
+            )
         else:
             filters.append(
                 _or(Award.agency.ilike(f"%{agency}%"), Award.sub_agency.ilike(f"%{agency}%"))
