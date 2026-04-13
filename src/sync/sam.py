@@ -238,12 +238,12 @@ async def _sync_date_range(client: httpx.AsyncClient, posted_from: str, posted_t
 
 
 async def sync_sam_opportunities() -> int:
-    """Fetch recent SAM.gov opportunities (last 2 days) and upsert. Returns count ingested."""
+    """Fetch recent SAM.gov opportunities (last 14 days) and upsert. Returns count ingested."""
     if not settings.sam_gov_api_key:
         logger.warning("SAM_GOV_API_KEY not set, skipping sync")
         return 0
 
-    posted_from = (datetime.now(UTC) - timedelta(days=2)).strftime("%m/%d/%Y")
+    posted_from = (datetime.now(UTC) - timedelta(days=14)).strftime("%m/%d/%Y")
     posted_to = datetime.now(UTC).strftime("%m/%d/%Y")
 
     async with httpx.AsyncClient(timeout=30) as client:

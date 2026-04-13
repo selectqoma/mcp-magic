@@ -41,7 +41,7 @@ async def match_opportunities_to_profile(
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
     max_results: int = 10,
-    min_score: float = 0.3,
+    min_score: float = 0.35,
 ) -> dict:
     # Merge inline params with saved profile
     caps = list(capabilities or []) + list(getattr(profile, "capabilities", None) or [])
@@ -182,8 +182,9 @@ def _semantic_score(opp: Opportunity, profile_embedding: list[float] | None) -> 
     a = np.array(profile_embedding)
     b = np.array(opp.embedding)
     cosine = float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-10))
-    # Normalize cosine [-1, 1] to [0, 1]
-    return (cosine + 1) / 2
+    # Text embeddings (text-embedding-3-small) produce non-negative cosine values.
+    # Use raw cosine directly — don't inflate with [-1,1]→[0,1] normalization.
+    return max(0.0, cosine)
 
 
 def _generate_reasoning(breakdown: dict, opp: Opportunity, caps: list, naics: list, certs: list) -> str:

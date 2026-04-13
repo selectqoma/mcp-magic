@@ -21,15 +21,22 @@ PAGE_SIZE = 100
 
 
 def _parse_award(item: dict) -> dict:
+    award_id = item.get("Award ID") or item.get("award_id", "")
+    description = item.get("Award Description") or item.get("description")
+    agency = item.get("Awarding Agency") or item.get("awarding_agency_name", "")
+    naics = item.get("NAICS Code") or item.get("naics_code") or item.get("naics")
+    # Build a fallback title when description is null (common in USASpending data)
+    if not description and award_id:
+        description = f"{award_id}" + (f" — {agency}" if agency else "")
     return {
-        "award_id": item.get("Award ID") or item.get("award_id", ""),
+        "award_id": award_id,
         "recipient_name": item.get("Recipient Name") or item.get("recipient_name"),
         "recipient_uei": item.get("recipient_uei"),
         "recipient_cage": item.get("recipient_cage_code"),
-        "agency": item.get("Awarding Agency") or item.get("awarding_agency_name"),
+        "agency": agency,
         "sub_agency": item.get("Awarding Sub Agency") or item.get("awarding_sub_agency_name"),
-        "title": item.get("Award Description") or item.get("description"),
-        "naics_code": item.get("NAICS Code") or item.get("naics_code"),
+        "title": description,
+        "naics_code": naics,
         "award_amount": _parse_float(item.get("Award Amount") or item.get("total_obligated_amount")),
         "award_date": _parse_date(item.get("Start Date") or item.get("action_date")),
         "period_of_performance_end": _parse_date(item.get("End Date")),
@@ -68,6 +75,7 @@ async def sync_usaspending_awards() -> int:
             "Award ID", "Recipient Name", "Award Amount", "Awarding Agency",
             "Awarding Sub Agency", "Award Description", "NAICS Code",
             "Start Date", "End Date", "Place of Performance State Code",
+            "recipient_uei", "naics_code",
         ],
         "page": 1,
         "limit": PAGE_SIZE,

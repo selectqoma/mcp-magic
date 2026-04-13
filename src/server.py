@@ -253,7 +253,7 @@ async def match_to_profile(
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
     max_results: int = 10,
-    min_score: float = 0.3,
+    min_score: float = 0.35,
 ) -> dict:
     """Score and rank current opportunities against your company profile.
 
@@ -268,7 +268,7 @@ async def match_to_profile(
         certifications: e.g. ["8a", "SDVOSB", "HUBZone", "WOSB", "SB"]
         past_agencies: e.g. ["Department of Defense", "DHS"]
         max_results: Maximum matches to return (default 10, max 25)
-        min_score: Minimum match score 0-1 (default 0.3)
+        min_score: Minimum match score 0-1 (default 0.35)
 
     Returns:
         List of scored matches with score breakdown and reasoning per match
