@@ -14,6 +14,7 @@ from fastmcp import FastMCP
 from sqlalchemy import and_, select
 
 from src.auth import check_search_limit, get_user_by_api_key, requires_pro
+from src.config import settings
 from src.db import AsyncSessionLocal
 from src.models.award import Award
 from src.models.notification import Notification
@@ -36,8 +37,11 @@ def _truncate_list(lst: list | None, max_items: int, max_item_len: int) -> list 
 async def _resolve_attachment_filename(url: str) -> str | None:
     """HEAD request to get Content-Disposition filename from SAM attachment URL."""
     try:
+        params = {}
+        if settings.sam_gov_api_key:
+            params["api_key"] = settings.sam_gov_api_key
         async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
-            resp = await client.head(url)
+            resp = await client.head(url, params=params)
             cd = resp.headers.get("content-disposition", "")
             m = re.search(r'filename="?([^";]+)"?', cd)
             if m:
@@ -45,6 +49,35 @@ async def _resolve_attachment_filename(url: str) -> str | None:
     except Exception:
         pass
     return None
+
+
+async def _fetch_description_for_url(url: str) -> str:
+    """Fetch plain-text description from a SAM API description URL."""
+    try:
+        params = {}
+        if settings.sam_gov_api_key:
+            params["api_key"] = settings.sam_gov_api_key
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(url, params=params)
+            if resp.status_code == 200:
+                from html.parser import HTMLParser
+                import re as _re
+
+                class _S(HTMLParser):
+                    def __init__(self):
+                        super().__init__()
+                        self._parts: list[str] = []
+                    def handle_data(self, d):
+                        self._parts.append(d)
+                    def text(self):
+                        return _re.sub(r"\s+", " ", " ".join(self._parts)).strip()
+
+                s = _S()
+                s.feed(resp.text)
+                return s.text()[:3000]
+    except Exception:
+        pass
+    return ""
 
 
 async def _enrich_attachments(attachments: list) -> list:
@@ -210,8 +243,17 @@ async def get_opportunity_details(
         if not opp:
             return {"error": f"Opportunity '{opportunity_id}' not found."}
 
+        description = opp.description or ""
+        # Lazy-fetch description if stored as a URL (SAM API returns URL placeholder)
+        if description.startswith("http") and opp.source == "sam":
+            fetched = await _fetch_description_for_url(description)
+            if fetched:
+                description = fetched
+                opp.description = fetched
+                await session.commit()
+
         data = _serialize(opp)
-        data["description"] = opp.description
+        data["description"] = description
         data["requirements"] = opp.requirements
         data["attachments"] = await _enrich_attachments(opp.attachments or [])
         return data
@@ -506,7 +548,7 @@ async def search_past_awards(
 
     Args:
         api_key: Your GovCon MCP API key
-        keyword: Search in award title/description (e.g. "zero trust", "cloud migration")
+        keyword: Search across award title, agency, sub-agency, and recipient name (e.g. "cybersecurity", "cloud")
         agency: Filter by awarding agency (partial match)
         naics_code: Filter by NAICS code (exact)
         recipient_name: Filter by recipient company name (partial match)
@@ -533,9 +575,18 @@ async def search_past_awards(
     if naics_code is not None:
         naics_code = naics_code[:200]
 
+    from sqlalchemy import or_ as _or
     filters = []
     if keyword:
-        filters.append(Award.title.ilike(f"%{keyword}%"))
+        # USASpending award descriptions are often null; search title, agency, and sub_agency
+        filters.append(
+            _or(
+                Award.title.ilike(f"%{keyword}%"),
+                Award.agency.ilike(f"%{keyword}%"),
+                Award.sub_agency.ilike(f"%{keyword}%"),
+                Award.recipient_name.ilike(f"%{keyword}%"),
+            )
+        )
     if agency:
         filters.append(Award.agency.ilike(f"%{agency}%"))
     if naics_code:
