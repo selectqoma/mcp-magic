@@ -22,7 +22,7 @@ from src.models.opportunity import Opportunity
 from src.models.profile import CompanyProfile
 from src.services.matching import match_opportunities_to_profile
 from src.services.parsing import parse_solicitation_pdf
-from src.services.search import _serialize, search_opportunities
+from src.services.search import _serialize, search_opportunities as _search_service
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -316,7 +316,7 @@ async def search_opportunities(
         if not allowed:
             return {"error": reason}
 
-        return await search_opportunities(
+        return await _search_service(
             session,
             query=query,
             naics_codes=naics_codes,
