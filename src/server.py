@@ -51,51 +51,149 @@ async def _resolve_attachment_filename(url: str) -> str | None:
     return None
 
 
+def _strip_html_text(html: str) -> str:
+    from html.parser import HTMLParser
+
+    class _S(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self._parts: list[str] = []
+        def handle_data(self, d):
+            self._parts.append(d)
+        def text(self):
+            return re.sub(r"\s+", " ", " ".join(self._parts)).strip()
+
+    s = _S()
+    s.feed(html)
+    return s.text()[:3000]
+
+
+def _extract_desc_from_sam_response(data: dict) -> str:
+    """Pull plain-text description from a SAM v2/v3 opportunity response dict."""
+    items = data.get("opportunitiesData") or data.get("opportunities") or []
+    if not items:
+        return ""
+    notice = items[0].get("notice") or items[0]
+    desc = notice.get("description") or notice.get("synopsis", "") or ""
+    if desc and not desc.startswith("http"):
+        return _strip_html_text(desc)
+    return ""
+
+
 async def _fetch_description_for_url(url: str) -> str:
-    """Fetch plain-text description from a SAM API description URL."""
+    """Fetch plain-text description for a SAM opportunity from a stored URL.
+
+    SAM backfill records store v1 noticedesc URLs that are now deprecated (404).
+    We extract the noticeid and re-fetch via v2/v3 SAM APIs.
+    """
+    if not settings.sam_gov_api_key:
+        return ""
+    key = settings.sam_gov_api_key
+    # Extract noticeid from v1 URL: .../v1/noticedesc?noticeid=<id>
+    m = re.search(r"noticeid=([a-zA-Z0-9]+)", url, re.IGNORECASE)
+    noticeid = m.group(1) if m else None
+
     try:
-        params = {}
-        if settings.sam_gov_api_key:
-            params["api_key"] = settings.sam_gov_api_key
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            resp = await client.get(url, params=params)
-            if resp.status_code == 200:
-                from html.parser import HTMLParser
-                import re as _re
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            if noticeid:
+                # Try SAM v2 search by noticeid
+                r = await client.get(
+                    "https://api.sam.gov/opportunities/v2/search",
+                    params={"api_key": key, "noticeid": noticeid, "limit": 1},
+                )
+                if r.status_code == 200:
+                    text = _extract_desc_from_sam_response(r.json())
+                    if text:
+                        return text[:3000]
 
-                class _S(HTMLParser):
-                    def __init__(self):
-                        super().__init__()
-                        self._parts: list[str] = []
-                    def handle_data(self, d):
-                        self._parts.append(d)
-                    def text(self):
-                        return _re.sub(r"\s+", " ", " ".join(self._parts)).strip()
+                # Try SAM v3 direct opportunity lookup
+                r = await client.get(
+                    f"https://api.sam.gov/prod/opps/v3/opportunities/{noticeid}",
+                    params={"api_key": key},
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    notice = data.get("notice") or data
+                    desc = notice.get("description") or notice.get("synopsis", "") or ""
+                    if desc and not desc.startswith("http"):
+                        return _strip_html_text(desc)[:3000]
 
-                s = _S()
-                s.feed(resp.text)
-                return s.text()[:3000]
+            # Fallback: try the original URL directly with auth
+            r = await client.get(url, params={"api_key": key})
+            if r.status_code == 200 and len(r.text) > 50:
+                return _strip_html_text(r.text)[:3000]
     except Exception:
         pass
     return ""
 
 
-async def _enrich_attachments(attachments: list) -> list:
+async def _sam_attachment_filenames(source_id: str) -> dict[int, str]:
+    """Fetch real filenames for SAM attachments via the v3 resources API.
+    Returns {index: filename} mapping.
+    """
+    if not settings.sam_gov_api_key or not source_id:
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            r = await client.get(
+                f"https://api.sam.gov/prod/opps/v3/opportunities/{source_id}/resources",
+                params={"api_key": settings.sam_gov_api_key},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                # Try multiple field name patterns the SAM API might use
+                files = (
+                    data.get("opportunityAttachments")
+                    or data.get("attachments")
+                    or data.get("fileInfoList")
+                    or data.get("files")
+                    or []
+                )
+                result = {}
+                for i, f in enumerate(files):
+                    name = f.get("name") or f.get("filename") or f.get("resourceName") or f.get("title")
+                    if name:
+                        result[i] = str(name)
+                return result
+    except Exception:
+        pass
+    return {}
+
+
+async def _enrich_attachments(
+    attachments: list,
+    source: str | None = None,
+    source_id: str | None = None,
+) -> list:
     """Resolve real filenames for attachments where filename is a sequential index."""
     if not attachments:
         return attachments
-    # Only fetch for entries where filename is a raw numeric index (e.g. "0", "1")
+    has_numeric = any(str(a.get("filename", "")).isdigit() for a in attachments)
+    if not has_numeric:
+        return attachments
+
+    enriched = [dict(a) for a in attachments]
+
+    # For SAM: use the v3 resources API (one call for all files)
+    if source == "sam" and source_id:
+        filenames = await _sam_attachment_filenames(source_id)
+        if filenames:
+            for idx, name in filenames.items():
+                if idx < len(enriched) and str(enriched[idx].get("filename", "")).isdigit():
+                    enriched[idx]["filename"] = name
+            return enriched
+
+    # Fallback: individual HEAD/GET requests per attachment
     to_resolve = [
         (i, att) for i, att in enumerate(attachments)
         if att.get("url") and str(att.get("filename", "")).isdigit()
     ]
     if not to_resolve:
-        return attachments
+        return enriched
     results = await asyncio.gather(
         *[_resolve_attachment_filename(att["url"]) for _, att in to_resolve],
         return_exceptions=True,
     )
-    enriched = [dict(a) for a in attachments]
     for (idx, _), result in zip(to_resolve, results):
         if isinstance(result, str) and result:
             enriched[idx]["filename"] = result
@@ -255,7 +353,7 @@ async def get_opportunity_details(
         data = _serialize(opp)
         data["description"] = description
         data["requirements"] = opp.requirements
-        data["attachments"] = await _enrich_attachments(opp.attachments or [])
+        data["attachments"] = await _enrich_attachments(opp.attachments or [], opp.source, opp.source_id)
         return data
 
 
