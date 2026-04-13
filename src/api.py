@@ -167,6 +167,42 @@ async def admin_backfill(request: Request, background_tasks: BackgroundTasks):
     return {"message": "Backfill started in background (90 days, 7-day chunks)"}
 
 
+@app.get("/admin/sam-debug")
+async def admin_sam_debug(noticeid: str, request: Request):
+    """Test SAM API description fetch for a given noticeid."""
+    import httpx
+    from src.config import settings
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not secret or secret != getattr(settings, "admin_secret", None):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    key = settings.sam_gov_api_key
+    url = f"https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid={noticeid}"
+    results = {}
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        # Test v1 URL with auth
+        try:
+            r = await client.get(url, params={"api_key": key})
+            results["v1_with_auth"] = {"status": r.status_code, "len": len(r.text), "preview": r.text[:200]}
+        except Exception as e:
+            results["v1_with_auth"] = {"error": str(e)}
+        # Test v2 search by noticeid
+        try:
+            r = await client.get(
+                "https://api.sam.gov/opportunities/v2/search",
+                params={"api_key": key, "noticeid": noticeid, "limit": 1},
+            )
+            data = r.json()
+            items = data.get("opportunitiesData") or []
+            desc = ""
+            if items:
+                n = items[0].get("notice") or items[0]
+                desc = n.get("description", "")
+            results["v2_search"] = {"status": r.status_code, "items": len(items), "desc_preview": str(desc)[:200]}
+        except Exception as e:
+            results["v2_search"] = {"error": str(e)}
+    return results
+
+
 # ── Static landing page ────────────────────────────────────────────────────────
 
 _LANDING_PATH = Path(__file__).parent.parent / "landing" / "index.html"

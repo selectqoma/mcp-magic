@@ -69,14 +69,19 @@ def _strip_html_text(html: str) -> str:
 
 
 def _clean_description(text: str | None) -> str | None:
-    """Strip Microsoft Word HTML artifact classes and normalize whitespace."""
+    """Strip HTML tags, decode entities, and normalize whitespace from descriptions."""
     if not text:
         return text
-    # Remove Word markup spans: <span class="SCXW..."> etc.
-    cleaned = re.sub(r'<span[^>]*class="[^"]*(?:SCXW|BCX|WACLine)[^"]*"[^>]*>', "", text)
-    cleaned = re.sub(r'</span>', "", cleaned)
-    # Collapse excessive whitespace
-    cleaned = re.sub(r"\s{3,}", "\n\n", cleaned)
+    import html
+    # Remove all HTML tags
+    cleaned = re.sub(r"<[^>]+>", " ", text)
+    # Decode HTML entities (e.g. &#8239; → narrow no-break space → regular space)
+    cleaned = html.unescape(cleaned)
+    # Replace non-breaking/narrow spaces with regular spaces
+    cleaned = re.sub(r"[\u00a0\u202f\u2007\u2009\u200a]", " ", cleaned)
+    # Collapse whitespace
+    cleaned = re.sub(r" {2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip() or None
 
 
