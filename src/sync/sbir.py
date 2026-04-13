@@ -11,7 +11,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import httpx
-from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from src.config import settings
@@ -66,34 +65,14 @@ async def sync_sbir_opportunities() -> int:
 
             parsed = [_parse_sam_opportunity(item) for item in items]
 
-            # Collect raw SAM source_ids to skip anything already in DB as source=sam
-            raw_sam_ids = [p["source_id"] for p in parsed]
-            async with AsyncSessionLocal() as session:
-                existing = await session.execute(
-                    select(Opportunity.source_id).where(
-                        Opportunity.source == "sam",
-                        Opportunity.source_id.in_(raw_sam_ids),
-                    )
-                )
-                already_in_sam = {row[0] for row in existing.fetchall()}
-
-            # Override source to "sbir" and skip records already indexed as SAM
-            filtered = []
+            # Index as source=sbir with SBIR- prefix so users can filter by source=sbir.
+            # These same records may exist as source=sam — that's acceptable; the SBIR
+            # source lets users find them specifically as SBIR/STTR solicitations.
             for p in parsed:
-                if p["source_id"] in already_in_sam:
-                    continue  # already covered by SAM sync, skip
                 p["source"] = "sbir"
                 p["source_id"] = "SBIR-" + p["source_id"]
                 if not p.get("set_aside_type"):
                     p["set_aside_type"] = "SB"
-                filtered.append(p)
-            parsed = filtered
-            if not parsed:
-                total = data.get("totalRecords") or 0
-                params["offset"] += PAGE_SIZE
-                if params["offset"] >= total or params["offset"] >= 10000:
-                    break
-                continue
 
             # Fetch real description text where SAM returned a URL
             desc_tasks = [
