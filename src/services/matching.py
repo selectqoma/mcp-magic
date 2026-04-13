@@ -122,6 +122,19 @@ def _score_opportunity(
     setaside_score = _setaside_score(opp, certs)
     semantic_score = _semantic_score(opp, profile_embedding)
 
+    # Hard relevance gate: set-aside eligibility must not substitute for actual relevance.
+    # If keyword, naics, and semantic all signal low/no match, exclude regardless of set-aside.
+    # This prevents "NUT, SELF-LOCKING" from appearing in cyber company results just because
+    # the company is SBA-certified.
+    relevance_score = keyword_score * 0.45 + naics_score * 0.25 + semantic_score * 0.20
+    if relevance_score < 0.12:
+        return 0.0, {
+            "keyword": round(keyword_score, 3),
+            "naics": round(naics_score, 3),
+            "set_aside_eligibility": round(setaside_score, 3),
+            "semantic": round(semantic_score, 3),
+        }
+
     total = (
         keyword_score * 0.45
         + naics_score * 0.25

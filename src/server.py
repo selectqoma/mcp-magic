@@ -502,8 +502,9 @@ async def match_to_profile(
 ) -> dict:
     """Score and rank current opportunities against your company profile.
 
-    Scoring: keyword overlap (40%), NAICS match (20%), set-aside eligibility (20%),
-    semantic similarity (20%).
+    Scoring: keyword overlap (45%), NAICS match (25%), semantic similarity (20%),
+    set-aside eligibility (10%). Low-relevance results are filtered by a hard gate
+    regardless of set-aside status.
 
     Args:
         api_key: Your GovCon MCP API key (Pro tier required)
@@ -757,7 +758,20 @@ async def search_past_awards(
             )
         )
     if agency:
-        filters.append(Award.agency.ilike(f"%{agency}%"))
+        # USASpending uses abbreviated agency names (e.g. "DEPT OF DEFENSE" not "Department of Defense").
+        # Match on individual significant words so partial/abbreviated names work.
+        # Also search sub_agency since many contracts land under a component.
+        words = [w for w in agency.split() if len(w) >= 3]
+        if words:
+            word_conditions = [
+                _or(Award.agency.ilike(f"%{w}%"), Award.sub_agency.ilike(f"%{w}%"))
+                for w in words
+            ]
+            filters.append(_or(*word_conditions))
+        else:
+            filters.append(
+                _or(Award.agency.ilike(f"%{agency}%"), Award.sub_agency.ilike(f"%{agency}%"))
+            )
     if naics_code:
         filters.append(Award.naics_code == naics_code)
     if recipient_name:
