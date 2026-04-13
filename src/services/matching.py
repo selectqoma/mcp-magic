@@ -41,7 +41,7 @@ async def match_opportunities_to_profile(
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
     max_results: int = 10,
-    min_score: float = 0.35,
+    min_score: float = 0.25,
 ) -> dict:
     # Merge inline params with saved profile
     caps = list(capabilities or []) + list(getattr(profile, "capabilities", None) or [])

@@ -3,10 +3,13 @@ GovCon MCP — Government Contracts & Grants Intelligence
 FastMCP server exposing 7 tools for AI agents to search federal opportunities.
 """
 
+import asyncio
 import logging
+import re
 import uuid as uuid_lib
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from fastmcp import FastMCP
 from sqlalchemy import and_, select
 
@@ -28,6 +31,42 @@ def _truncate_list(lst: list | None, max_items: int, max_item_len: int) -> list 
     if lst is None:
         return None
     return [str(item)[:max_item_len] for item in lst[:max_items]]
+
+
+async def _resolve_attachment_filename(url: str) -> str | None:
+    """HEAD request to get Content-Disposition filename from SAM attachment URL."""
+    try:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+            resp = await client.head(url)
+            cd = resp.headers.get("content-disposition", "")
+            m = re.search(r'filename="?([^";]+)"?', cd)
+            if m:
+                return m.group(1).strip()
+    except Exception:
+        pass
+    return None
+
+
+async def _enrich_attachments(attachments: list) -> list:
+    """Resolve real filenames for attachments where filename is a sequential index."""
+    if not attachments:
+        return attachments
+    # Only fetch for entries where filename is a raw numeric index (e.g. "0", "1")
+    to_resolve = [
+        (i, att) for i, att in enumerate(attachments)
+        if att.get("url") and str(att.get("filename", "")).isdigit()
+    ]
+    if not to_resolve:
+        return attachments
+    results = await asyncio.gather(
+        *[_resolve_attachment_filename(att["url"]) for _, att in to_resolve],
+        return_exceptions=True,
+    )
+    enriched = [dict(a) for a in attachments]
+    for (idx, _), result in zip(to_resolve, results):
+        if isinstance(result, str) and result:
+            enriched[idx]["filename"] = result
+    return enriched
 
 
 mcp = FastMCP(
@@ -174,6 +213,7 @@ async def get_opportunity_details(
         data = _serialize(opp)
         data["description"] = opp.description
         data["requirements"] = opp.requirements
+        data["attachments"] = await _enrich_attachments(opp.attachments or [])
         return data
 
 
@@ -253,7 +293,7 @@ async def match_to_profile(
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
     max_results: int = 10,
-    min_score: float = 0.35,
+    min_score: float = 0.25,
 ) -> dict:
     """Score and rank current opportunities against your company profile.
 
@@ -268,7 +308,7 @@ async def match_to_profile(
         certifications: e.g. ["8a", "SDVOSB", "HUBZone", "WOSB", "SB"]
         past_agencies: e.g. ["Department of Defense", "DHS"]
         max_results: Maximum matches to return (default 10, max 25)
-        min_score: Minimum match score 0-1 (default 0.35)
+        min_score: Minimum match score 0-1 (default 0.25)
 
     Returns:
         List of scored matches with score breakdown and reasoning per match
@@ -428,11 +468,14 @@ async def track_competitors(
             },
             "recent_awards": [
                 {
-                    "title": a.title,
+                    "award_id": a.award_id,
+                    "title": a.title or (f"{a.award_id} — {a.agency}" if a.award_id else None),
                     "agency": a.agency,
+                    "sub_agency": a.sub_agency,
                     "value": float(a.award_amount or 0),
                     "date": a.award_date.isoformat() if a.award_date else None,
                     "naics": a.naics_code,
+                    "place_of_performance": a.place_of_performance,
                 }
                 for a in awards[:20]
             ],
@@ -446,6 +489,7 @@ async def track_competitors(
 @mcp.tool()
 async def search_past_awards(
     api_key: str,
+    keyword: str | None = None,
     agency: str | None = None,
     naics_code: str | None = None,
     recipient_name: str | None = None,
@@ -462,6 +506,7 @@ async def search_past_awards(
 
     Args:
         api_key: Your GovCon MCP API key
+        keyword: Search in award title/description (e.g. "zero trust", "cloud migration")
         agency: Filter by awarding agency (partial match)
         naics_code: Filter by NAICS code (exact)
         recipient_name: Filter by recipient company name (partial match)
@@ -479,6 +524,8 @@ async def search_past_awards(
         return {"error": err}
 
     # Input sanitization
+    if keyword is not None:
+        keyword = keyword[:200]
     if agency is not None:
         agency = agency[:200]
     if recipient_name is not None:
@@ -487,6 +534,8 @@ async def search_past_awards(
         naics_code = naics_code[:200]
 
     filters = []
+    if keyword:
+        filters.append(Award.title.ilike(f"%{keyword}%"))
     if agency:
         filters.append(Award.agency.ilike(f"%{agency}%"))
     if naics_code:
@@ -531,9 +580,10 @@ async def search_past_awards(
         return {
             "awards": [
                 {
+                    "award_id": a.award_id,
                     "recipient": a.recipient_name,
                     "agency": a.agency,
-                    "title": a.title,
+                    "title": a.title or (f"{a.award_id} — {a.agency}" if a.award_id else None),
                     "value": float(a.award_amount or 0),
                     "date": a.award_date.isoformat() if a.award_date else None,
                     "naics": a.naics_code,
