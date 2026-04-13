@@ -342,16 +342,36 @@ async def get_opportunity_details(
             return {"error": f"Opportunity '{opportunity_id}' not found."}
 
         description = opp.description or ""
-        # Lazy-fetch description if stored as a URL (SAM API returns URL placeholder)
-        if description.startswith("http") and opp.source == "sam":
-            fetched = await _fetch_description_for_url(description)
-            if fetched:
-                description = fetched
-                opp.description = fetched
-                await session.commit()
+        sam_gov_url = None
+
+        if opp.source == "sam":
+            # Extract SAM.gov public URL from raw_data or from the description URL's noticeid
+            raw = opp.raw_data or {}
+            notice = raw.get("notice") or raw
+            sam_gov_url = (
+                notice.get("uiLink")
+                or notice.get("additionalInfoLink")
+            )
+            if not sam_gov_url:
+                # Construct from noticeid embedded in the description URL
+                m = re.search(r"noticeid=([a-zA-Z0-9]+)", description, re.IGNORECASE)
+                if m:
+                    sam_gov_url = f"https://sam.gov/opp/{m.group(1)}/view"
+
+            # Lazy-fetch description if stored as a URL (SAM API returns URL placeholder)
+            if description.startswith("http"):
+                fetched = await _fetch_description_for_url(description)
+                if fetched:
+                    description = fetched
+                    opp.description = fetched
+                    await session.commit()
+                else:
+                    # Can't fetch description text; return None so agents don't see a raw API URL
+                    description = None
 
         data = _serialize(opp)
         data["description"] = description
+        data["sam_gov_url"] = sam_gov_url
         data["requirements"] = opp.requirements
         data["attachments"] = await _enrich_attachments(opp.attachments or [], opp.source, opp.source_id)
         return data
@@ -726,6 +746,14 @@ async def search_past_awards(
 
         top_recipients = sorted(recipient_totals.items(), key=lambda x: x[1], reverse=True)[:10]
 
+        note = None
+        if keyword and not awards:
+            note = (
+                "No awards matched this keyword. USASpending award titles are often brief "
+                "contract IDs (e.g. 'W52P1J24A0001'). For topic searches, try naics_code= "
+                "or agency= filters instead. Example: agency='Cybersecurity' or naics_code='541511'."
+            )
+
         return {
             "awards": [
                 {
@@ -748,6 +776,7 @@ async def search_past_awards(
                     {"name": k, "total": round(v, 2)} for k, v in top_recipients
                 ],
             },
+            **({"note": note} if note else {}),
         }
 
 

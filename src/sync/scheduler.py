@@ -8,7 +8,7 @@ from src.services.notifications import run_notification_matching
 from src.sync.grants import sync_grants_opportunities
 from src.sync.sam import sync_sam_opportunities
 from src.sync.sbir import sync_sbir_opportunities
-from src.sync.usaspending import sync_usaspending_awards
+from src.sync.usaspending import backfill_usaspending_awards, sync_usaspending_awards
 
 logger = logging.getLogger(__name__)
 
@@ -60,3 +60,5 @@ async def run_initial_sync():
     await run_sync("Grants.gov", sync_grants_opportunities)
     await run_sync("SBIR.gov", sync_sbir_opportunities)
     await run_sync("USASpending", sync_usaspending_awards)
+    # Backfill 90 days of awards for richer market intelligence data
+    await run_sync("USASpending backfill", backfill_usaspending_awards)

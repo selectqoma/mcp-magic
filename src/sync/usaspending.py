@@ -63,7 +63,7 @@ def _parse_float(val) -> float | None:
 
 async def sync_usaspending_awards() -> int:
     """Fetch recent federal contract awards. Returns count ingested."""
-    date_range_start = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%d")
+    date_range_start = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%d")
     date_range_end = datetime.now(UTC).strftime("%Y-%m-%d")
 
     payload = {
@@ -123,3 +123,84 @@ async def sync_usaspending_awards() -> int:
 
     logger.info(f"USASpending sync complete: {ingested} awards ingested")
     return ingested
+
+
+async def backfill_usaspending_awards(days_back: int = 90) -> int:
+    """Backfill USASpending awards going back `days_back` days in 30-day chunks.
+
+    Call once to populate the database with historical award data for better
+    market intelligence and keyword search coverage.
+    """
+    total = 0
+    now = datetime.now(UTC)
+    end = now - timedelta(days=30)  # regular sync covers last 30 days
+    start = now - timedelta(days=days_back)
+
+    cursor = start
+    while cursor < end:
+        chunk_end = min(cursor + timedelta(days=30), end)
+        payload_start = cursor.strftime("%Y-%m-%d")
+        payload_end = chunk_end.strftime("%Y-%m-%d")
+        logger.info(f"USASpending backfill: {payload_start} → {payload_end}")
+
+        payload = {
+            "filters": {
+                "award_type_codes": ["A", "B", "C", "D"],
+                "time_period": [{"start_date": payload_start, "end_date": payload_end}],
+            },
+            "fields": [
+                "Award ID", "Recipient Name", "Award Amount", "Awarding Agency",
+                "Awarding Sub Agency", "Award Description", "NAICS Code",
+                "Start Date", "End Date", "Place of Performance State Code",
+                "recipient_uei", "naics_code",
+            ],
+            "page": 1,
+            "limit": PAGE_SIZE,
+            "sort": "Start Date",
+            "order": "desc",
+        }
+
+        ingested = 0
+        async with httpx.AsyncClient(timeout=60) as client:
+            while True:
+                try:
+                    resp = await client.post(USA_BASE, json=payload)
+                    resp.raise_for_status()
+                    data = resp.json()
+                except Exception as e:
+                    logger.error(f"USASpending backfill API error: {e}")
+                    break
+
+                items = data.get("results") or []
+                if not items:
+                    break
+
+                parsed = [_parse_award(item) for item in items]
+                async with AsyncSessionLocal() as session:
+                    for p in parsed:
+                        if not p["award_id"]:
+                            continue
+                        from sqlalchemy.dialects.postgresql import insert
+                        stmt = (
+                            insert(Award)
+                            .values(**p)
+                            .on_conflict_do_update(
+                                index_elements=["award_id"],
+                                set_={k: v for k, v in p.items() if k != "award_id"},
+                            )
+                        )
+                        await session.execute(stmt)
+                    await session.commit()
+
+                ingested += len(parsed)
+                page_meta = data.get("page_metadata") or {}
+                if not page_meta.get("hasNext") and not page_meta.get("has_next_page"):
+                    break
+                payload["page"] += 1
+
+        total += ingested
+        logger.info(f"USASpending backfill chunk done: {ingested} awards (total so far: {total})")
+        cursor = chunk_end + timedelta(days=1)
+
+    logger.info(f"USASpending backfill complete: {total} total awards")
+    return total
