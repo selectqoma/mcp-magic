@@ -512,7 +512,7 @@ async def search_past_awards(
         stmt = (
             select(Award)
             .where(and_(*filters) if filters else Award.award_id.is_not(None))
-            .order_by(Award.award_amount.desc().nulls_last())
+            .order_by(Award.award_date.desc().nulls_last())
             .limit(min(limit, 50))
         )
         result = await session.execute(stmt)

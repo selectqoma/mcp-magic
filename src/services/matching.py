@@ -142,8 +142,10 @@ def _keyword_score(opp: Opportunity, caps: list[str]) -> float:
 
 
 def _naics_score(opp: Opportunity, naics: list[str]) -> float:
-    if not naics or not opp.naics_codes:
-        return 0.5  # neutral
+    if not naics:
+        return 0.5  # profile has no NAICS preference — neutral
+    if not opp.naics_codes:
+        return 0.3  # opp has no NAICS data — unknown relevance, slight penalty
     opp_naics = set(opp.naics_codes or [])
     profile_naics = set(naics)
     # Also match on 4-digit prefix (broader category)
@@ -159,7 +161,7 @@ def _naics_score(opp: Opportunity, naics: list[str]) -> float:
 
 def _setaside_score(opp: Opportunity, certs: list[str]) -> float:
     if not opp.set_aside_type:
-        return 0.8  # unrestricted — open to anyone, slightly favorable
+        return 0.5  # unrestricted — open to all, neutral score
     sa = opp.set_aside_type.lower()
     required_cert = next(
         (v for k, v in SET_ASIDE_CERT_MAP.items() if k in sa), None
@@ -187,15 +189,25 @@ def _semantic_score(opp: Opportunity, profile_embedding: list[float] | None) -> 
 def _generate_reasoning(breakdown: dict, opp: Opportunity, caps: list, naics: list, certs: list) -> str:
     parts = []
     if breakdown["keyword"] >= 0.5:
-        parts.append("capability keywords match")
+        matched = [cap for cap in caps if cap.lower() in f"{opp.title or ''} {opp.description or ''}".lower()]
+        if matched:
+            parts.append(f"keywords matched: {', '.join(matched[:3])}")
+        else:
+            parts.append("general capability relevance")
+    elif breakdown["keyword"] < 0.2 and caps:
+        parts.append("low keyword overlap with your capabilities")
     if breakdown["naics"] == 1.0:
-        parts.append("exact NAICS code match")
+        parts.append(f"exact NAICS match ({', '.join(opp.naics_codes or [])})")
     elif breakdown["naics"] == 0.6:
-        parts.append("NAICS category overlap")
+        parts.append("NAICS sector overlap")
+    elif breakdown["naics"] == 0.0 and naics:
+        parts.append("no NAICS overlap")
     if breakdown["set_aside_eligibility"] == 1.0 and opp.set_aside_type:
-        parts.append(f"eligible for {opp.set_aside_type} set-aside")
+        parts.append(f"eligible: {opp.set_aside_type} set-aside")
     elif breakdown["set_aside_eligibility"] == 0.0 and opp.set_aside_type:
-        parts.append(f"missing certification for {opp.set_aside_type}")
-    if breakdown["semantic"] >= 0.7:
-        parts.append("strong semantic profile match")
-    return "; ".join(parts) if parts else "partial match"
+        parts.append(f"ineligible: requires {opp.set_aside_type} certification")
+    if breakdown["semantic"] >= 0.65:
+        parts.append("high semantic similarity to your profile")
+    elif breakdown["semantic"] < 0.45:
+        parts.append("low semantic similarity")
+    return "; ".join(parts) if parts else "weak match across all criteria"

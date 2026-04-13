@@ -71,7 +71,7 @@ async def sync_usaspending_awards() -> int:
         ],
         "page": 1,
         "limit": PAGE_SIZE,
-        "sort": "Award Amount",
+        "sort": "Start Date",
         "order": "desc",
     }
 

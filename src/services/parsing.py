@@ -94,7 +94,7 @@ async def parse_solicitation_pdf(url: str) -> dict:
 
     # Download the PDF with size limit
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
             resp = await client.get(url)
             resp.raise_for_status()
             content_length = int(resp.headers.get("content-length", 0))
@@ -107,8 +107,8 @@ async def parse_solicitation_pdf(url: str) -> dict:
                 if len(data) > MAX_PDF_BYTES:
                     return {"error": "PDF too large (>20MB).", "parsing_confidence": 0.0}
     except Exception as e:
-        logger.error(f"Failed to download PDF from {url}: {e}")
-        return {"error": f"Could not download PDF: {e}", "parsing_confidence": 0.0}
+        logger.error(f"Failed to download attachment from {url}: {e}")
+        return {"error": "Could not download the attachment. It may require authentication or is no longer available.", "parsing_confidence": 0.0}
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         tmp.write(data)
