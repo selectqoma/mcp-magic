@@ -25,14 +25,22 @@ _DETAIL_SEMAPHORE = asyncio.Semaphore(15)
 
 
 async def _fetch_grant_description(client: httpx.AsyncClient, source_id: str) -> tuple[str, str]:
-    """Fetch synopsis from the Grants.gov detail endpoint. Returns (source_id, description)."""
+    """Fetch synopsis from the Grants.gov detail endpoint. Returns (source_id, description).
+
+    The detail endpoint requires POST with application/x-www-form-urlencoded.
+    Response: {"synopsis": {"synopsisDesc": "..."}}
+    """
     numeric_id = source_id.removeprefix("GRANTS-")
     async with _DETAIL_SEMAPHORE:
         try:
-            resp = await client.get(GRANTS_DETAIL_URL, params={"oppId": numeric_id}, timeout=30)
+            resp = await client.post(
+                GRANTS_DETAIL_URL,
+                content=f"oppId={numeric_id}",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=30,
+            )
             resp.raise_for_status()
             data = resp.json()
-            # Response shape: {"synopsis": {"synopsisDesc": "..."}} or {"synopsis": "..."}
             synopsis = data.get("synopsis") or {}
             if isinstance(synopsis, dict):
                 text = synopsis.get("synopsisDesc", "") or ""
@@ -49,8 +57,8 @@ def _parse_grant(item: dict) -> dict:
         "source": "grants",
         "source_id": f"GRANTS-{item.get('id', '')}",
         "title": item.get("title", ""),
-        "description": item.get("description") or item.get("synopsis", ""),
-        "agency": item.get("agencyName") or item.get("agencyCode", ""),
+        "description": "",  # fetched separately via detail endpoint
+        "agency": item.get("agency") or item.get("agencyCode", ""),
         "naics_codes": [],
         "set_aside_type": None,
         "posted_date": _parse_date(item.get("openDate")),
@@ -58,7 +66,7 @@ def _parse_grant(item: dict) -> dict:
         "estimated_value_low": _parse_float(item.get("awardFloor")),
         "estimated_value_high": _parse_float(item.get("awardCeiling")),
         "place_of_performance": None,
-        "contact_info": {"agency": item.get("agencyName")},
+        "contact_info": {"agency": item.get("agency") or item.get("agencyCode")},
         "attachments": [],
         "raw_data": item,
     }
