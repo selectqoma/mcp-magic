@@ -695,12 +695,18 @@ async def search_past_awards(
 ) -> dict:
     """Search historical federal contract awards for market intelligence.
 
-    Use this to answer: "How much does DoD spend on cybersecurity?"
-    or "Who are the top contractors for NAICS 541511 at DHS?"
+    Use this to answer: "How much does DHS spend on IT services?"
+    or "Who are the top contractors for NAICS 541511 at DoD?"
+
+    Best filters: agency (partial name match), naics_code (exact), recipient_name (partial).
+    keyword searches across title, agency, sub-agency, and recipient name — use full agency names
+    (e.g. "Department of Defense") rather than topic words (e.g. "cybersecurity") for best results.
 
     Args:
         api_key: Your GovCon MCP API key
-        keyword: Search across award title, agency, sub-agency, and recipient name (e.g. "cybersecurity", "cloud")
+        keyword: Search across award title, agency, sub-agency, and recipient name.
+            Use full agency names for best results: "Department of Defense", "NASA", "DHS".
+            Topic keywords like "cybersecurity" won't match unless in the agency/recipient name.
         agency: Filter by awarding agency (partial match)
         naics_code: Filter by NAICS code (exact)
         recipient_name: Filter by recipient company name (partial match)
