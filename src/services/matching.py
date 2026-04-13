@@ -45,7 +45,7 @@ async def match_opportunities_to_profile(
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
     max_results: int = 10,
-    min_score: float = 0.25,
+    min_score: float = 0.30,
 ) -> dict:
     # Merge inline params with saved profile
     caps = list(capabilities or []) + list(getattr(profile, "capabilities", None) or [])
@@ -124,10 +124,8 @@ def _score_opportunity(
 
     # Hard relevance gate: set-aside eligibility must not substitute for actual relevance.
     # If keyword, naics, and semantic all signal low/no match, exclude regardless of set-aside.
-    # This prevents "NUT, SELF-LOCKING" from appearing in cyber company results just because
-    # the company is SBA-certified.
     relevance_score = keyword_score * 0.45 + naics_score * 0.25 + semantic_score * 0.20
-    if relevance_score < 0.12:
+    if relevance_score < 0.15:
         return 0.0, {
             "keyword": round(keyword_score, 3),
             "naics": round(naics_score, 3),
@@ -178,7 +176,7 @@ def _naics_score(opp: Opportunity, naics: list[str]) -> float:
 
 def _setaside_score(opp: Opportunity, certs: list[str]) -> float:
     if not opp.set_aside_type:
-        return 0.5  # unrestricted — open to all, neutral score
+        return 0.0  # unrestricted — no set-aside boost; open competition
     sa = opp.set_aside_type.lower()
     required_cert = next(
         (v for k, v in SET_ASIDE_CERT_MAP.items() if k in sa), None

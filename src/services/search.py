@@ -170,6 +170,12 @@ def _serialize(o: Opportunity) -> dict:
         "estimated_value_high": float(o.estimated_value_high) if o.estimated_value_high else None,
         "place_of_performance": o.place_of_performance,
         "contact_info": o.contact_info,
-        "attachments": o.attachments or [],
+        # Strip numeric placeholder filenames ("0", "1") — real filenames are resolved lazily
+        # in get_opportunity_details via the SAM v3 resources API. Show attachment_count instead.
+        "attachments": [
+            {k: v for k, v in a.items() if k != "filename" or not str(v).isdigit()}
+            for a in (o.attachments or [])
+        ],
+        "attachment_count": len(o.attachments or []),
         "has_parsed_requirements": has_parsed,
     }

@@ -263,7 +263,7 @@ async def _resolve_user(api_key: str):
 # ─────────────────────────────────────────────
 
 @mcp.tool()
-async def search_opportunities_tool(
+async def search_opportunities(
     api_key: str,
     query: str = "",
     naics_codes: list[str] | None = None,
@@ -379,15 +379,13 @@ async def get_opportunity_details(
         sam_gov_url = None
 
         if opp.source == "sam":
-            # Extract SAM.gov public URL from raw_data or from the description URL's noticeid
-            raw = opp.raw_data or {}
-            notice = raw.get("notice") or raw
-            sam_gov_url = (
-                notice.get("uiLink")
-                or notice.get("additionalInfoLink")
-            )
-            if not sam_gov_url:
-                # Construct from noticeid embedded in the description URL
+            # Always construct public URL from source_id (noticeId).
+            # The SAM API's uiLink uses /workspace/contract/opp/ which requires login;
+            # the public URL is /opp/{noticeId}/view and works without authentication.
+            if opp.source_id:
+                sam_gov_url = f"https://sam.gov/opp/{opp.source_id}/view"
+            else:
+                # Fallback: extract noticeid from description URL
                 m = re.search(r"noticeid=([a-zA-Z0-9]+)", description, re.IGNORECASE)
                 if m:
                     sam_gov_url = f"https://sam.gov/opp/{m.group(1)}/view"
@@ -498,7 +496,7 @@ async def match_to_profile(
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
     max_results: int = 10,
-    min_score: float = 0.25,
+    min_score: float = 0.30,
 ) -> dict:
     """Score and rank current opportunities against your company profile.
 
