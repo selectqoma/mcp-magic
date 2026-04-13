@@ -167,11 +167,26 @@ async def admin_backfill(request: Request, background_tasks: BackgroundTasks):
     return {"message": "Backfill started in background (90 days, 7-day chunks)"}
 
 
+@app.post("/admin/backfill-awards")
+async def admin_backfill_awards(request: Request, background_tasks: BackgroundTasks):
+    """Trigger USASpending 90-day backfill. Protected by ADMIN_SECRET."""
+    from src.config import settings
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not secret or secret != getattr(settings, "admin_secret", None):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from src.sync.usaspending import backfill_usaspending_awards
+    background_tasks.add_task(backfill_usaspending_awards, days_back=90)
+    return {"message": "USASpending 90-day backfill started in background"}
+
+
 @app.get("/admin/sam-debug")
 async def admin_sam_debug(noticeid: str, request: Request):
     """Test SAM API description fetch for a given noticeid."""
     import httpx
     from src.config import settings
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not secret or secret != getattr(settings, "admin_secret", None):
+        raise HTTPException(status_code=403, detail="Forbidden")
     key = settings.sam_gov_api_key
     url = f"https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid={noticeid}"
     results = {}

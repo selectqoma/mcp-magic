@@ -151,10 +151,13 @@ async def _fetch_description_for_url(url: str) -> str:
 
             # Fallback: try the original URL directly with auth
             r = await client.get(url, params={"api_key": key})
+            if r.status_code == 429:
+                logger.warning("SAM API quota exhausted for description fetch (429)")
+                return ""
             if r.status_code == 200 and len(r.text) > 50:
                 return _strip_html_text(r.text)[:3000]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"SAM description fetch error: {e}")
     return ""
 
 

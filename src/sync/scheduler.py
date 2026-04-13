@@ -60,5 +60,4 @@ async def run_initial_sync():
     await run_sync("Grants.gov", sync_grants_opportunities)
     await run_sync("SBIR.gov", sync_sbir_opportunities)
     await run_sync("USASpending", sync_usaspending_awards)
-    # Backfill 90 days of awards for richer market intelligence data
-    await run_sync("USASpending backfill", backfill_usaspending_awards)
+    # Note: USASpending backfill (90 days) is triggered manually via /admin/backfill-awards
