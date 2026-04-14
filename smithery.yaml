@@ -10,8 +10,8 @@ homepage: "https://govconmcp.com"
 repository: "https://github.com/selectqoma/mcp-magic"
 author: "GovCon MCP"
 
-transport: sse
-url: "https://api.govconmcp.com/sse"
+transport: http
+url: "https://api.govconmcp.com/mcp/"
 
 categories:
   - business
@@ -28,7 +28,7 @@ tags:
   - GovCon
 
 tools:
-  - name: search_opportunities_tool
+  - name: search_opportunities
     description: "Semantic + filtered search across SAM.gov, Grants.gov, SBIR. Free tier: 20/day."
   - name: get_opportunity_details
     description: "Full opportunity details including description, contacts, and attachments."
@@ -60,7 +60,7 @@ config:
       "mcpServers": {
         "mcp-magic": {
           "command": "npx",
-          "args": ["-y", "mcp-remote", "https://api.govconmcp.com/sse"],
+          "args": ["-y", "mcp-remote", "https://api.govconmcp.com/mcp/"],
           "env": {
             "MCP_API_KEY": "<your-api-key>"
           }
