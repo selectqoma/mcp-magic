@@ -35,17 +35,29 @@ def _truncate_list(lst: list | None, max_items: int, max_item_len: int) -> list 
 
 
 async def _resolve_attachment_filename(url: str) -> str | None:
-    """HEAD request to get Content-Disposition filename from SAM attachment URL."""
+    """Resolve a real filename for a SAM attachment URL.
+
+    Tries (in order):
+    1. Content-Disposition header from HEAD/GET response
+    2. Filename extracted from the final (redirect) URL path
+    """
     try:
         params = {}
         if settings.sam_gov_api_key:
             params["api_key"] = settings.sam_gov_api_key
-        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
             resp = await client.head(url, params=params)
+            # 1. Content-Disposition header
             cd = resp.headers.get("content-disposition", "")
-            m = re.search(r'filename="?([^";]+)"?', cd)
+            m = re.search(r'filename\*?=["\']?(?:UTF-8\'\')?([^"\';\r\n]+)', cd, re.IGNORECASE)
             if m:
-                return m.group(1).strip()
+                return m.group(1).strip().strip('"\'')
+            # 2. Extract from final URL path (S3 redirect often encodes filename in path)
+            final_url = str(resp.url)
+            path = final_url.split("?")[0].rstrip("/")
+            basename = path.split("/")[-1]
+            if "." in basename and len(basename) > 4:
+                return basename
     except Exception:
         pass
     return None
@@ -168,29 +180,43 @@ async def _sam_attachment_filenames(source_id: str) -> dict[int, str]:
     if not settings.sam_gov_api_key or not source_id:
         return {}
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(
                 f"https://api.sam.gov/prod/opps/v3/opportunities/{source_id}/resources",
                 params={"api_key": settings.sam_gov_api_key},
             )
-            if r.status_code == 200:
-                data = r.json()
-                # Try multiple field name patterns the SAM API might use
-                files = (
-                    data.get("opportunityAttachments")
-                    or data.get("attachments")
-                    or data.get("fileInfoList")
-                    or data.get("files")
-                    or []
-                )
-                result = {}
-                for i, f in enumerate(files):
-                    name = f.get("name") or f.get("filename") or f.get("resourceName") or f.get("title")
-                    if name:
-                        result[i] = str(name)
-                return result
-    except Exception:
-        pass
+            if r.status_code != 200:
+                logger.debug(f"SAM v3 resources {source_id}: status {r.status_code}")
+                return {}
+            data = r.json()
+            logger.debug(f"SAM v3 resources {source_id}: keys={list(data.keys())}")
+            # Walk any list value in the response — SAM API field names vary by version
+            files = None
+            for key in ("opportunityAttachments", "attachments", "fileInfoList", "files",
+                        "resources", "links", "resourceLinks", "items"):
+                val = data.get(key)
+                if isinstance(val, list) and val:
+                    files = val
+                    break
+            # Last resort: find the first list value in the response
+            if files is None:
+                for v in data.values():
+                    if isinstance(v, list) and v and isinstance(v[0], dict):
+                        files = v
+                        break
+            if not files:
+                return {}
+            result = {}
+            for i, f in enumerate(files):
+                if not isinstance(f, dict):
+                    continue
+                name = (f.get("name") or f.get("filename") or f.get("resourceName")
+                        or f.get("title") or f.get("fileTitle") or f.get("originalFilename"))
+                if name and "." in str(name):
+                    result[i] = str(name)
+            return result
+    except Exception as e:
+        logger.debug(f"SAM v3 resources error for {source_id}: {e}")
     return {}
 
 

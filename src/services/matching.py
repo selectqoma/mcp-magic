@@ -13,7 +13,8 @@ eligible. Keyword + NAICS (70% combined) must drive the match.
 
 import logging
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, cast, or_, select, text, union
+from sqlalchemy.dialects.postgresql import ARRAY, VARCHAR
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.embeddings import embed_text
@@ -64,21 +65,45 @@ async def match_opportunities_to_profile(
         logger.warning(f"Could not embed profile: {e}")
         profile_embedding = None
 
-    # Fetch candidate opportunities (active, non-expired)
+    # Fetch candidate opportunities — smart selection to maximise recall.
+    # Pulls NAICS-matching opps first (guaranteed inclusion), then fills
+    # with recent opps. Without this, a 500-row limit on a 2700-row table
+    # misses most NAICS-specific opportunities if they're not in the first 500 rows.
     from datetime import UTC, datetime
-    stmt = (
-        select(Opportunity)
-        .where(
-            or_(
-                Opportunity.response_deadline >= datetime.now(UTC),
-                Opportunity.response_deadline.is_(None),
-            )
-        )
-        .limit(500)  # score top 500 candidates
+    active_filter = or_(
+        Opportunity.response_deadline >= datetime.now(UTC),
+        Opportunity.response_deadline.is_(None),
     )
 
-    result = await session.execute(stmt)
-    opps = result.scalars().all()
+    # Set 1: NAICS-matching opportunities (up to 400)
+    naics_opps: list[Opportunity] = []
+    if naics:
+        naics_stmt = (
+            select(Opportunity)
+            .where(
+                and_(
+                    active_filter,
+                    Opportunity.naics_codes.overlap(cast(naics, ARRAY(VARCHAR))),
+                )
+            )
+            .limit(400)
+        )
+        naics_result = await session.execute(naics_stmt)
+        naics_opps = list(naics_result.scalars().all())
+
+    # Set 2: recently posted opps (fill remainder up to 600 total)
+    seen_ids = {o.id for o in naics_opps}
+    fill_limit = max(200, 600 - len(naics_opps))
+    fill_stmt = (
+        select(Opportunity)
+        .where(active_filter)
+        .order_by(Opportunity.posted_date.desc().nulls_last())
+        .limit(fill_limit)
+    )
+    fill_result = await session.execute(fill_stmt)
+    fill_opps = [o for o in fill_result.scalars().all() if o.id not in seen_ids]
+
+    opps = naics_opps + fill_opps
 
     if not opps:
         return {"matches": [], "message": "No active opportunities found in database yet."}
