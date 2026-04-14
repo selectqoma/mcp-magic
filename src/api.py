@@ -215,6 +215,50 @@ async def admin_sam_debug(noticeid: str, request: Request):
     return results
 
 
+@app.post("/admin/enrich-descriptions")
+async def admin_enrich_descriptions(request: Request, background_tasks: BackgroundTasks, batch_size: int = 50):
+    """Trigger SAM description enrichment. Protected by ADMIN_SECRET."""
+    from src.config import settings
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not secret or secret != getattr(settings, "admin_secret", None):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from src.sync.sam import enrich_sam_descriptions
+    background_tasks.add_task(enrich_sam_descriptions, batch_size=batch_size)
+    return {"message": f"Description enrichment started (batch_size={batch_size})"}
+
+
+@app.get("/admin/description-stats")
+async def admin_description_stats(request: Request):
+    """Show how many SAM opps have null/URL/real descriptions. Protected by ADMIN_SECRET."""
+    from src.config import settings
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not secret or secret != getattr(settings, "admin_secret", None):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from sqlalchemy import func, case, text as _text
+    from src.db import AsyncSessionLocal
+    from src.models.opportunity import Opportunity
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            _text("""
+                SELECT
+                    COUNT(*) FILTER (WHERE source = 'sam' AND description IS NULL) AS sam_null,
+                    COUNT(*) FILTER (WHERE source = 'sam' AND description = '') AS sam_empty,
+                    COUNT(*) FILTER (WHERE source = 'sam' AND description LIKE 'http%') AS sam_url,
+                    COUNT(*) FILTER (WHERE source = 'sam' AND description NOT LIKE 'http%' AND description IS NOT NULL AND description != '') AS sam_real,
+                    COUNT(*) FILTER (WHERE source = 'sam') AS sam_total
+                FROM opportunities
+            """)
+        )
+        row = result.fetchone()
+        return {
+            "sam_null": row[0],
+            "sam_empty": row[1],
+            "sam_url": row[2],
+            "sam_real": row[3],
+            "sam_total": row[4],
+        }
+
+
 # ── Static landing page ────────────────────────────────────────────────────────
 
 _LANDING_PATH = Path(__file__).parent.parent / "landing" / "index.html"

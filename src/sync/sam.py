@@ -292,15 +292,22 @@ async def enrich_sam_descriptions(batch_size: int = 50) -> int:
     async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
         for opp in opps:
             url = opp.description or ""
-            if not url.startswith("http"):
-                continue
 
             # source_id IS the noticeId for SAM records — use it directly.
             # Fall back to extracting from URL if source_id is missing.
             noticeid = opp.source_id or ""
-            if not noticeid:
+            if not noticeid and url.startswith("http"):
                 m = re.search(r"noticeid=([a-zA-Z0-9]+)", url, re.IGNORECASE)
                 noticeid = m.group(1) if m else ""
+
+            # For null/empty descriptions, construct fetch URL from noticeid
+            if not url.startswith("http") and noticeid:
+                url = f"https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid={noticeid}"
+
+            if not url.startswith("http"):
+                logger.debug(f"Skipping opp {opp.id}: no URL and no source_id")
+                continue
+
             text = ""
 
             if noticeid:
@@ -322,7 +329,7 @@ async def enrich_sam_descriptions(batch_size: int = 50) -> int:
                             if raw and not raw.startswith("http"):
                                 text = _strip_html(raw)[:3000]
                 except Exception as e:
-                    logger.debug(f"SAM v2 enrichment error for {noticeid}: {e}")
+                    logger.warning(f"SAM v2 enrichment error for {noticeid}: {e}")
 
             # Fallback: fetch original URL directly
             if not text:
