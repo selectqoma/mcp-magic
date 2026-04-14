@@ -46,7 +46,7 @@ async def match_opportunities_to_profile(
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
     max_results: int = 10,
-    min_score: float = 0.30,
+    min_score: float = 0.25,
 ) -> dict:
     # Merge inline params with saved profile
     caps = list(capabilities or []) + list(getattr(profile, "capabilities", None) or [])
@@ -201,7 +201,7 @@ def _naics_score(opp: Opportunity, naics: list[str]) -> float:
 
 def _setaside_score(opp: Opportunity, certs: list[str]) -> float:
     if not opp.set_aside_type:
-        return 0.0  # unrestricted — no set-aside boost; open competition
+        return 0.5  # unrestricted — open competition, neutral score
     sa = opp.set_aside_type.lower()
     required_cert = next(
         (v for k, v in SET_ASIDE_CERT_MAP.items() if k in sa), None

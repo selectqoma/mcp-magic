@@ -52,12 +52,16 @@ async def _resolve_attachment_filename(url: str) -> str | None:
             m = re.search(r'filename\*?=["\']?(?:UTF-8\'\')?([^"\';\r\n]+)', cd, re.IGNORECASE)
             if m:
                 return m.group(1).strip().strip('"\'')
-            # 2. Extract from final URL path (S3 redirect often encodes filename in path)
+            # 2. Extract from final URL path — only if it looks like a real filename
+            # (not a UUID/hex resource ID like "3a19960569af4a638315d1ea0428d3f5.pdf")
             final_url = str(resp.url)
             path = final_url.split("?")[0].rstrip("/")
             basename = path.split("/")[-1]
             if "." in basename and len(basename) > 4:
-                return basename
+                name_part = basename.rsplit(".", 1)[0]
+                # Skip pure hex UUIDs (32+ hex chars — these are S3 resource IDs, not real names)
+                if not re.match(r"^[0-9a-f]{16,}$", name_part, re.IGNORECASE):
+                    return basename
     except Exception:
         pass
     return None
@@ -237,10 +241,12 @@ async def _enrich_attachments(
     # For SAM: use the v3 resources API (one call for all files)
     if source == "sam" and source_id:
         filenames = await _sam_attachment_filenames(source_id)
-        if filenames:
-            for idx, name in filenames.items():
-                if idx < len(enriched) and str(enriched[idx].get("filename", "")).isdigit():
-                    enriched[idx]["filename"] = name
+        for idx, name in filenames.items():
+            if idx < len(enriched) and str(enriched[idx].get("filename", "")).isdigit():
+                enriched[idx]["filename"] = name
+        # If v3 resolved all filenames, return; otherwise fall through to HEAD requests
+        still_numeric = any(str(enriched[i].get("filename", "")).isdigit() for i in range(len(enriched)))
+        if not still_numeric:
             return enriched
 
     # Fallback: individual HEAD/GET requests per attachment
@@ -257,6 +263,12 @@ async def _enrich_attachments(
     for (idx, _), result in zip(to_resolve, results):
         if isinstance(result, str) and result:
             enriched[idx]["filename"] = result
+        else:
+            # Last resort: clean label with correct extension from URL
+            url = attachments[idx].get("url", "")
+            ext = url.rstrip("/").split("?")[0].rsplit(".", 1)[-1][:6].lower()
+            ext = ext if ext in ("pdf", "docx", "doc", "xlsx", "pptx", "txt", "zip") else "pdf"
+            enriched[idx]["filename"] = f"attachment_{idx + 1}.{ext}"
     return enriched
 
 
@@ -522,7 +534,7 @@ async def match_to_profile(
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
     max_results: int = 10,
-    min_score: float = 0.30,
+    min_score: float = 0.25,
 ) -> dict:
     """Score and rank current opportunities against your company profile.
 
