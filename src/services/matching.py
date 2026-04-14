@@ -45,6 +45,7 @@ async def match_opportunities_to_profile(
     naics_codes: list[str] | None = None,
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
+    source: str | None = None,
     max_results: int = 10,
     min_score: float = 0.25,
 ) -> dict:
@@ -66,26 +67,20 @@ async def match_opportunities_to_profile(
         profile_embedding = None
 
     # Fetch candidate opportunities — smart selection to maximise recall.
-    # Pulls NAICS-matching opps first (guaranteed inclusion), then fills
-    # with recent opps. Without this, a 500-row limit on a 2700-row table
-    # misses most NAICS-specific opportunities if they're not in the first 500 rows.
     from datetime import UTC, datetime
     active_filter = or_(
         Opportunity.response_deadline >= datetime.now(UTC),
         Opportunity.response_deadline.is_(None),
     )
+    source_filter = [Opportunity.source == source.lower()] if source else []
 
     # Set 1: NAICS-matching opportunities (up to 400)
     naics_opps: list[Opportunity] = []
     if naics:
         naics_stmt = (
             select(Opportunity)
-            .where(
-                and_(
-                    active_filter,
-                    Opportunity.naics_codes.overlap(cast(naics, ARRAY(VARCHAR))),
-                )
-            )
+            .where(and_(active_filter, *source_filter,
+                        Opportunity.naics_codes.overlap(cast(naics, ARRAY(VARCHAR)))))
             .limit(400)
         )
         naics_result = await session.execute(naics_stmt)
@@ -96,7 +91,7 @@ async def match_opportunities_to_profile(
     fill_limit = max(200, 600 - len(naics_opps))
     fill_stmt = (
         select(Opportunity)
-        .where(active_filter)
+        .where(and_(active_filter, *source_filter))
         .order_by(Opportunity.posted_date.desc().nulls_last())
         .limit(fill_limit)
     )

@@ -533,6 +533,7 @@ async def match_to_profile(
     naics_codes: list[str] | None = None,
     certifications: list[str] | None = None,
     past_agencies: list[str] | None = None,
+    source: str | None = None,
     max_results: int = 10,
     min_score: float = 0.25,
 ) -> dict:
@@ -542,6 +543,9 @@ async def match_to_profile(
     set-aside eligibility (10%). Low-relevance results are filtered by a hard gate
     regardless of set-aside status.
 
+    Tip: use source="sam" to restrict results to federal contracts only (excludes
+    grants and SBIR awards that may appear when keyword overlap is incidental).
+
     Args:
         api_key: Your GovCon MCP API key (Pro tier required)
         profile_id: Saved profile UUID, OR provide inline capabilities/naics/certs
@@ -549,6 +553,7 @@ async def match_to_profile(
         naics_codes: e.g. ["541511", "541512"]
         certifications: e.g. ["8a", "SDVOSB", "HUBZone", "WOSB", "SB"]
         past_agencies: e.g. ["Department of Defense", "DHS"]
+        source: Filter by source — "sam" (contracts only), "grants", "sbir", or omit for all
         max_results: Maximum matches to return (default 10, max 25)
         min_score: Minimum match score 0-1 (default 0.25)
 
@@ -591,6 +596,7 @@ async def match_to_profile(
             naics_codes=naics_codes,
             certifications=certifications,
             past_agencies=past_agencies,
+            source=source,
             max_results=min(max_results, 25),
             min_score=min_score,
         )
