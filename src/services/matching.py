@@ -148,9 +148,13 @@ def _score_opportunity(
     semantic_score = _semantic_score(opp, profile_embedding)
 
     # Hard relevance gate: set-aside eligibility must not substitute for actual relevance.
-    # If keyword, naics, and semantic all signal low/no match, exclude regardless of set-aside.
     relevance_score = keyword_score * 0.45 + naics_score * 0.25 + semantic_score * 0.20
-    if relevance_score < 0.15:
+
+    # Tighter gate for no-NAICS opps when profile specifies NAICS codes:
+    # prevents embassy/grant programs that mention "cybersecurity" in passing
+    # from polluting results for NAICS-specific profiles.
+    gate = 0.25 if (naics and not opp.naics_codes) else 0.15
+    if relevance_score < gate:
         return 0.0, {
             "keyword": round(keyword_score, 3),
             "naics": round(naics_score, 3),
