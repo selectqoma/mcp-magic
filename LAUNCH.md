@@ -66,39 +66,47 @@ Copy-paste ready posts and deploy steps for launch day.
 
 ## Show HN Post
 
-**Title:** Show HN: MCP server that searches 75K+ federal contract opportunities
+**Title:** Show HN: GovCon MCP – search federal contracts from Claude or Cursor
 
 **Body:**
 ```
-I built a paid MCP server for government contract intelligence.
+I built a paid MCP server for US government contracting intelligence.
 
-The problem: SAM.gov has 75,000+ active federal opportunities, but their UI and API are terrible.
-GovCon firms pay $500-2,000/month for tools like GovWin just to get structured access. There
+France just shipped an official MCP server for data.gouv.fr (74K public datasets). The US
+government's contracting data — $700B/year in federal spend — is sitting behind equally
+unusable APIs. I built the MCP layer for it.
+
+The problem: SAM.gov, Grants.gov, and SBIR each have different APIs, schemas, and quirks.
+GovCon firms pay $500–2,000/month for tools like GovWin just to get structured access. There
 was no MCP-native option.
 
 What it does:
-- Search SAM.gov, Grants.gov, and SBIR.gov with semantic + SQL hybrid search (NAICS, set-aside,
-  agency, value, deadline filters)
-- Parse solicitation PDFs with Claude Haiku — extracts requirements, eval criteria, page limits,
+- Search across SAM.gov, Grants.gov, and SBIR with semantic + SQL hybrid search (pgvector +
+  filters for NAICS, set-aside type, agency, value range, deadline)
+- Parse solicitation PDFs — Claude Haiku extracts requirements, evaluation criteria, page limits,
   clearance requirements
-- Score opportunities against your company profile (keyword + NAICS + set-aside eligibility +
-  semantic similarity)
-- Track competitor award history via USASpending.gov
+- Score opportunities against your company profile (keyword overlap + NAICS match + set-aside
+  eligibility + semantic similarity)
+- Competitor intelligence via USASpending.gov — who wins what at which agencies
 - Auto-match new opportunities to saved profiles every 15 minutes
 
-Stack: FastMCP + FastAPI, PostgreSQL + pgvector, APScheduler, Claude Haiku for PDF parsing,
-text-embedding-3-small for semantic search. Deployed on Railway.
+Stack: FastMCP + FastAPI, PostgreSQL + pgvector, APScheduler, Claude Haiku (PDF parsing),
+text-embedding-3-small (semantic search), Paddle billing, Railway.
+
+Technical bits worth sharing:
+- SAM.gov's description field often returns a URL placeholder instead of text, requiring a
+  second authenticated API call with a daily quota that exhausts in minutes during backfill
+- IVFFlat index needs SET LOCAL ivfflat.probes = 50 for small datasets — default probes=10
+  with 100-list index returns empty results
+- Match scoring uses two-pass candidate selection: NAICS-matched opps first, then pgvector
+  nearest-neighbor fill. Without this, random DLA hardware parts pollute results for every profile
+- SAM decommissioned ezSearch in early 2026 so v2 API docs are scattered and inconsistent
 
 Free tier: 20 searches/day + 14-day Pro trial. Pro is $49/mo.
 
-The interesting technical bit: SAM.gov decommissioned their ezSearch API in Feb 2026, so the
-docs are a mess. The semantic search is genuinely useful because contract titles like
-"J045—MEDICAL EQUIPMENT MAINTENANCE SVCS" don't surface with keyword search for
-"hospital equipment maintenance."
+Would love feedback from anyone in GovCon or BD who's tried to automate opportunity pipeline work.
 
-Would appreciate any feedback from people who work in GovCon or have tried building with MCP.
-
-Link: govconmcp.com
+https://govconmcp.com
 ```
 
 ---
