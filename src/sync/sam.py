@@ -265,12 +265,17 @@ async def enrich_sam_descriptions(batch_size: int = 50) -> int:
     if not settings.sam_gov_api_key:
         return 0
 
+    from sqlalchemy import or_ as _or
     async with AsyncSessionLocal() as session:
         stmt = (
             select(Opportunity)
             .where(
                 Opportunity.source == "sam",
-                Opportunity.description.like("http%"),
+                _or(
+                    Opportunity.description.like("http%"),  # URL placeholder
+                    Opportunity.description.is_(None),       # never fetched
+                    Opportunity.description == "",            # fetch returned empty
+                ),
             )
             .limit(batch_size)
         )
@@ -290,9 +295,12 @@ async def enrich_sam_descriptions(batch_size: int = 50) -> int:
             if not url.startswith("http"):
                 continue
 
-            # Extract noticeid and try SAM v2 search first (less quota pressure than v1)
-            m = re.search(r"noticeid=([a-zA-Z0-9]+)", url, re.IGNORECASE)
-            noticeid = m.group(1) if m else (opp.source_id or "")
+            # source_id IS the noticeId for SAM records — use it directly.
+            # Fall back to extracting from URL if source_id is missing.
+            noticeid = opp.source_id or ""
+            if not noticeid:
+                m = re.search(r"noticeid=([a-zA-Z0-9]+)", url, re.IGNORECASE)
+                noticeid = m.group(1) if m else ""
             text = ""
 
             if noticeid:

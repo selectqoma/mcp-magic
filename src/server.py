@@ -428,15 +428,20 @@ async def get_opportunity_details(
                 if m:
                     sam_gov_url = f"https://sam.gov/opp/{m.group(1)}/view"
 
-            # Lazy-fetch description if stored as a URL (SAM API returns URL placeholder)
-            if description.startswith("http"):
-                fetched = await _fetch_description_for_url(description)
+            # Lazy-fetch description if stored as a URL placeholder or null.
+            # Use source_id (noticeId) directly — more reliable than extracting from URL.
+            if description.startswith("http") or not description:
+                fetch_url = description if description.startswith("http") else (
+                    f"https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid={opp.source_id}"
+                    if opp.source_id else ""
+                )
+                fetched = await _fetch_description_for_url(fetch_url) if fetch_url else ""
                 if fetched:
                     description = fetched
                     opp.description = fetched
                     await session.commit()
-                else:
-                    # Can't fetch description text; return None so agents don't see a raw API URL
+                elif description.startswith("http"):
+                    # URL placeholder but can't fetch — hide raw URL from agents
                     description = None
 
         data = _serialize(opp)
