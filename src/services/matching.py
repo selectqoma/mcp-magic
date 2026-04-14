@@ -86,15 +86,32 @@ async def match_opportunities_to_profile(
         naics_result = await session.execute(naics_stmt)
         naics_opps = list(naics_result.scalars().all())
 
-    # Set 2: recently posted opps (fill remainder up to 600 total)
+    # Set 2: semantically similar opps — use pgvector when embedding is available,
+    # otherwise fall back to recently posted. Semantic pre-selection prevents random
+    # DLA hardware parts from filling slots when profile has no NAICS specified.
     seen_ids = {o.id for o in naics_opps}
     fill_limit = max(200, 600 - len(naics_opps))
-    fill_stmt = (
-        select(Opportunity)
-        .where(and_(active_filter, *source_filter))
-        .order_by(Opportunity.posted_date.desc().nulls_last())
-        .limit(fill_limit)
-    )
+
+    if profile_embedding:
+        # Use pgvector to find top-N semantically similar opps.
+        # IVFFlat index needs higher probes for small datasets.
+        await session.execute(text("SET LOCAL ivfflat.probes = 50"))
+        emb_str = f"[{','.join(str(x) for x in profile_embedding)}]"
+        distance_expr = text("embedding <=> CAST(:q_vec AS vector)").bindparams(q_vec=emb_str)
+        fill_stmt = (
+            select(Opportunity)
+            .where(and_(active_filter, *source_filter, Opportunity.embedding.is_not(None)))
+            .order_by(distance_expr)
+            .limit(fill_limit)
+        )
+    else:
+        fill_stmt = (
+            select(Opportunity)
+            .where(and_(active_filter, *source_filter))
+            .order_by(Opportunity.posted_date.desc().nulls_last())
+            .limit(fill_limit)
+        )
+
     fill_result = await session.execute(fill_stmt)
     fill_opps = [o for o in fill_result.scalars().all() if o.id not in seen_ids]
 
