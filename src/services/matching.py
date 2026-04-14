@@ -185,7 +185,9 @@ def _naics_score(opp: Opportunity, naics: list[str]) -> float:
     if not naics:
         return 0.5  # profile has no NAICS preference — neutral
     if not opp.naics_codes:
-        return 0.3  # opp has no NAICS data — unknown relevance, slight penalty
+        # Profile specifies NAICS but opp has none — heavy penalty so NAICS-less opps
+        # (grants, embassy programs, etc.) don't crowd out relevant contract results.
+        return 0.05
     opp_naics = set(opp.naics_codes or [])
     profile_naics = set(naics)
     # Also match on 4-digit prefix (broader category)
