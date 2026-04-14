@@ -253,6 +253,102 @@ async def sync_sam_opportunities() -> int:
     return ingested
 
 
+async def enrich_sam_descriptions(batch_size: int = 50) -> int:
+    """Fetch real descriptions for SAM opps that still have URL placeholders.
+
+    During backfill, SAM quota exhaustion meant descriptions were stored as
+    v1 noticedesc URLs instead of actual text. This job processes them in
+    quota-friendly batches — call from scheduler after each sync cycle.
+
+    Returns count of opps successfully enriched.
+    """
+    if not settings.sam_gov_api_key:
+        return 0
+
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            select(Opportunity)
+            .where(
+                Opportunity.source == "sam",
+                Opportunity.description.like("http%"),
+            )
+            .limit(batch_size)
+        )
+        result = await session.execute(stmt)
+        opps = result.scalars().all()
+
+    if not opps:
+        logger.info("SAM description enrichment: nothing to enrich")
+        return 0
+
+    logger.info(f"SAM description enrichment: processing {len(opps)} opps")
+    enriched = 0
+
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        for opp in opps:
+            url = opp.description or ""
+            if not url.startswith("http"):
+                continue
+
+            # Extract noticeid and try SAM v2 search first (less quota pressure than v1)
+            m = re.search(r"noticeid=([a-zA-Z0-9]+)", url, re.IGNORECASE)
+            noticeid = m.group(1) if m else (opp.source_id or "")
+            text = ""
+
+            if noticeid:
+                try:
+                    r = await client.get(
+                        "https://api.sam.gov/opportunities/v2/search",
+                        params={"api_key": settings.sam_gov_api_key, "noticeid": noticeid, "limit": 1},
+                        timeout=15,
+                    )
+                    if r.status_code == 429:
+                        logger.warning("SAM quota exhausted during description enrichment — stopping batch")
+                        break
+                    if r.status_code == 200:
+                        data = r.json()
+                        items = data.get("opportunitiesData") or []
+                        if items:
+                            notice = items[0].get("notice") or items[0]
+                            raw = notice.get("description") or notice.get("synopsis") or ""
+                            if raw and not raw.startswith("http"):
+                                text = _strip_html(raw)[:3000]
+                except Exception as e:
+                    logger.debug(f"SAM v2 enrichment error for {noticeid}: {e}")
+
+            # Fallback: fetch original URL directly
+            if not text:
+                text = await _fetch_description(client, url)
+
+            if not text:
+                continue
+
+            # Re-embed with description for better semantic matching
+            embed_text = " ".join(filter(None, [opp.title, text, opp.agency, opp.set_aside_type]))
+            try:
+                from src.embeddings import embed_text as _embed_text
+                embedding = await _embed_text(embed_text)
+            except Exception:
+                embedding = opp.embedding  # keep existing if re-embed fails
+
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    select(Opportunity).where(Opportunity.id == opp.id)
+                )
+                opp_db = (await session.execute(
+                    select(Opportunity).where(Opportunity.id == opp.id)
+                )).scalar_one_or_none()
+                if opp_db:
+                    opp_db.description = text
+                    if embedding:
+                        opp_db.embedding = embedding
+                    await session.commit()
+                    enriched += 1
+
+    logger.info(f"SAM description enrichment complete: {enriched}/{len(opps)} enriched")
+    return enriched
+
+
 async def backfill_sam_opportunities(days_back: int = 365, chunk_days: int = 7) -> int:
     """Backfill SAM.gov opportunities going back `days_back` days in `chunk_days` chunks.
 

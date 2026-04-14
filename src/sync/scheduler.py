@@ -6,7 +6,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from src.config import settings
 from src.services.notifications import run_notification_matching
 from src.sync.grants import sync_grants_opportunities
-from src.sync.sam import sync_sam_opportunities
+from src.sync.sam import enrich_sam_descriptions, sync_sam_opportunities
 from src.sync.sbir import sync_sbir_opportunities
 from src.sync.usaspending import backfill_usaspending_awards, sync_usaspending_awards
 
@@ -50,6 +50,13 @@ def create_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(seconds=settings.sam_sync_interval),
         id="notification_matching", replace_existing=True,
     )
+    # Run description enrichment after each SAM sync to backfill URL placeholders
+    # in batches of 50 (quota-friendly — stops automatically when quota exhausted)
+    scheduler.add_job(
+        run_sync, args=["SAM-description-enrich", enrich_sam_descriptions],
+        trigger=IntervalTrigger(seconds=settings.sam_sync_interval),
+        id="sam_desc_enrich", replace_existing=True,
+    )
 
     return scheduler
 
@@ -60,4 +67,5 @@ async def run_initial_sync():
     await run_sync("Grants.gov", sync_grants_opportunities)
     await run_sync("SBIR.gov", sync_sbir_opportunities)
     await run_sync("USASpending", sync_usaspending_awards)
+    await run_sync("SAM-description-enrich", enrich_sam_descriptions)
     # Note: USASpending backfill (90 days) is triggered manually via /admin/backfill-awards
