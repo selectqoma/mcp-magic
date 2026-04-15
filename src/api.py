@@ -259,6 +259,37 @@ async def admin_description_stats(request: Request):
         }
 
 
+# ── Smithery / MCP discovery ───────────────────────────────────────────────────
+
+@app.get("/.well-known/mcp/server-card.json")
+async def mcp_server_card():
+    """Static metadata for Smithery and other MCP discovery tools."""
+    return {
+        "name": "GovCon MCP",
+        "displayName": "GovCon MCP — Federal Contract Intelligence",
+        "description": (
+            "Search US federal contract and grant opportunities from SAM.gov, Grants.gov, "
+            "and SBIR.gov. Parse solicitation PDFs, score opportunities against your company "
+            "profile, and track competitor award history via USASpending.gov."
+        ),
+        "homepage": "https://govconmcp.com",
+        "repository": "https://github.com/selectqoma/mcp-magic",
+        "transport": "http",
+        "endpoint": "https://api.govconmcp.com/mcp/",
+        "auth": {
+            "type": "apiKey",
+            "description": "Pass your API key as api_key parameter in each tool call. Get one free at govconmcp.com.",
+        },
+        "categories": ["business", "government", "search", "data"],
+        "pricing": {
+            "model": "freemium",
+            "free": "20 searches/day + 14-day Pro trial",
+            "pro": "$49/mo — unlimited searches, PDF parsing, profile matching, competitor intel",
+            "agency": "$199/mo — everything in Pro plus 20 profiles and webhook alerts",
+        },
+    }
+
+
 # ── Static landing page ────────────────────────────────────────────────────────
 
 _LANDING_PATH = Path(__file__).parent.parent / "landing" / "index.html"
