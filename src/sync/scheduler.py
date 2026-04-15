@@ -63,9 +63,16 @@ def create_scheduler() -> AsyncIOScheduler:
 
 async def run_initial_sync():
     """Run all syncs once at startup."""
+    # Drain description enrichment backlog FIRST — sync burns the same daily quota
+    # and descriptions are blocking launch. Loop until nothing left or quota exhausted.
+    logger.info("Startup: draining SAM description enrichment backlog...")
+    while True:
+        count = await enrich_sam_descriptions(batch_size=200)
+        if count == 0:
+            break
+    # Then run normal syncs
     await run_sync("SAM.gov", sync_sam_opportunities)
     await run_sync("Grants.gov", sync_grants_opportunities)
     await run_sync("SBIR.gov", sync_sbir_opportunities)
     await run_sync("USASpending", sync_usaspending_awards)
-    await run_sync("SAM-description-enrich", enrich_sam_descriptions)
     # Note: USASpending backfill (90 days) is triggered manually via /admin/backfill-awards

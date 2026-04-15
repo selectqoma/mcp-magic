@@ -243,7 +243,7 @@ async def sync_sam_opportunities() -> int:
         logger.warning("SAM_GOV_API_KEY not set, skipping sync")
         return 0
 
-    posted_from = (datetime.now(UTC) - timedelta(days=14)).strftime("%m/%d/%Y")
+    posted_from = (datetime.now(UTC) - timedelta(days=2)).strftime("%m/%d/%Y")
     posted_to = datetime.now(UTC).strftime("%m/%d/%Y")
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -308,32 +308,9 @@ async def enrich_sam_descriptions(batch_size: int = 50) -> int:
                 logger.debug(f"Skipping opp {opp.id}: no URL and no source_id")
                 continue
 
-            text = ""
-
-            if noticeid:
-                try:
-                    r = await client.get(
-                        "https://api.sam.gov/opportunities/v2/search",
-                        params={"api_key": settings.sam_gov_api_key, "noticeid": noticeid, "limit": 1},
-                        timeout=15,
-                    )
-                    if r.status_code == 429:
-                        logger.warning("SAM quota exhausted during description enrichment — stopping batch")
-                        break
-                    if r.status_code == 200:
-                        data = r.json()
-                        items = data.get("opportunitiesData") or []
-                        if items:
-                            notice = items[0].get("notice") or items[0]
-                            raw = notice.get("description") or notice.get("synopsis") or ""
-                            if raw and not raw.startswith("http"):
-                                text = _strip_html(raw)[:3000]
-                except Exception as e:
-                    logger.warning(f"SAM v2 enrichment error for {noticeid}: {e}")
-
-            # Fallback: fetch original URL directly
-            if not text:
-                text = await _fetch_description(client, url)
+            # Fetch description directly from v1 noticedesc endpoint.
+            # v2 search by noticeid also returns URL placeholders — skip it entirely.
+            text = await _fetch_description(client, url)
 
             if not text:
                 continue
