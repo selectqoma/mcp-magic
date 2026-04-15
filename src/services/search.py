@@ -1,6 +1,6 @@
 """Opportunity search service — combines semantic (pgvector) + SQL filters."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, cast, func, or_, select, text
 from sqlalchemy.dialects.postgresql import ARRAY, VARCHAR
@@ -30,11 +30,19 @@ async def search_opportunities(
 ) -> dict:
     filters = []
 
-    # Only active opportunities (deadline in the future or no deadline)
+    now = datetime.now(UTC)
+    # Only active opportunities: deadline in the future, or no deadline but posted recently
+    # (prevents stale grants from 2015/2018 with null deadlines flooding results)
     filters.append(
         or_(
-            Opportunity.response_deadline >= datetime.now(UTC),
-            Opportunity.response_deadline.is_(None),
+            Opportunity.response_deadline >= now,
+            and_(
+                Opportunity.response_deadline.is_(None),
+                or_(
+                    Opportunity.posted_date >= now - timedelta(days=730),
+                    Opportunity.posted_date.is_(None),
+                ),
+            ),
         )
     )
 
@@ -156,11 +164,13 @@ def _serialize(o: Opportunity) -> dict:
         and not (isinstance(o.requirements, dict) and "error" in o.requirements)
     )
 
+    description = o.description or ""
     return {
         "id": str(o.id),
         "source_id": o.source_id,
         "source": o.source,
         "title": o.title,
+        "description": description[:500] if description else None,
         "agency": o.agency,
         "naics_codes": o.naics_codes,
         "set_aside_type": o.set_aside_type,

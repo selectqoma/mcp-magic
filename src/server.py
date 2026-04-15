@@ -792,16 +792,18 @@ async def search_past_awards(
     if naics_code is not None:
         naics_code = naics_code[:200]
 
-    from sqlalchemy import or_ as _or
+    from sqlalchemy import or_ as _or, cast as _cast, Text as _Text
+    from sqlalchemy.dialects.postgresql import JSONB as _JSONB
     filters = []
     if keyword:
-        # USASpending award descriptions are often null; search title, agency, and sub_agency
+        # Search title, agency, sub_agency, recipient, and raw_data Award Description
         filters.append(
             _or(
                 Award.title.ilike(f"%{keyword}%"),
                 Award.agency.ilike(f"%{keyword}%"),
                 Award.sub_agency.ilike(f"%{keyword}%"),
                 Award.recipient_name.ilike(f"%{keyword}%"),
+                _cast(Award.raw_data["Award Description"], _Text).ilike(f"%{keyword}%"),
             )
         )
     if agency:

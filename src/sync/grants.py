@@ -58,7 +58,7 @@ def _parse_grant(item: dict) -> dict:
         "source_id": f"GRANTS-{item.get('id', '')}",
         "title": item.get("title", ""),
         "description": "",  # fetched separately via detail endpoint
-        "agency": item.get("agency") or item.get("agencyCode", ""),
+        "agency": (item.get("agency") or item.get("agencyCode", "")).strip(),
         "naics_codes": [],
         "set_aside_type": None,
         "posted_date": _parse_date(item.get("openDate")),
