@@ -49,8 +49,14 @@ def _strip_html(html: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+class _QuotaExhausted(Exception):
+    """Raised when SAM API returns 429 so callers can stop immediately."""
+
+
 async def _fetch_description(client: httpx.AsyncClient, url: str) -> str:
-    """Fetch SAM.gov notice description HTML and return as plain text."""
+    """Fetch SAM.gov notice description HTML and return as plain text.
+    Raises _QuotaExhausted on 429 so enrichment loops can stop immediately.
+    """
     async with _DESC_SEMAPHORE:
         try:
             resp = await client.get(
@@ -58,8 +64,13 @@ async def _fetch_description(client: httpx.AsyncClient, url: str) -> str:
                 params={"api_key": settings.sam_gov_api_key},
                 timeout=15,
             )
+            if resp.status_code == 429:
+                raise _QuotaExhausted("SAM API quota exhausted")
             if resp.status_code == 200:
                 return _strip_html(resp.text)[:3000]
+            logger.debug(f"SAM description fetch got {resp.status_code} for {url}")
+        except _QuotaExhausted:
+            raise
         except Exception as e:
             logger.debug(f"Failed to fetch SAM description from {url}: {e}")
     return ""
@@ -310,7 +321,11 @@ async def enrich_sam_descriptions(batch_size: int = 50) -> int:
 
             # Fetch description directly from v1 noticedesc endpoint.
             # v2 search by noticeid also returns URL placeholders — skip it entirely.
-            text = await _fetch_description(client, url)
+            try:
+                text = await _fetch_description(client, url)
+            except _QuotaExhausted:
+                logger.warning("SAM quota exhausted during enrichment — stopping batch early")
+                break
 
             if not text:
                 continue

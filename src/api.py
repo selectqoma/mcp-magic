@@ -215,6 +215,24 @@ async def admin_sam_debug(noticeid: str, request: Request):
     return results
 
 
+@app.get("/admin/sample-descriptions")
+async def admin_sample_descriptions(request: Request, limit: int = 5):
+    """Return sample raw description values from SAM opps (to debug enrichment)."""
+    from src.config import settings
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not secret or secret != getattr(settings, "admin_secret", None):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from sqlalchemy import text as _text
+    from src.db import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(_text(
+            "SELECT source_id, description FROM opportunities "
+            "WHERE source='sam' AND description IS NOT NULL LIMIT :n"
+        ), {"n": limit})
+        rows = result.fetchall()
+    return [{"source_id": r[0], "description": r[1][:200] if r[1] else None} for r in rows]
+
+
 @app.post("/admin/enrich-descriptions")
 async def admin_enrich_descriptions(request: Request, background_tasks: BackgroundTasks, batch_size: int = 50):
     """Trigger SAM description enrichment. Protected by ADMIN_SECRET."""
