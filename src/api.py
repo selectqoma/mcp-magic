@@ -181,38 +181,38 @@ async def admin_backfill_awards(request: Request, background_tasks: BackgroundTa
 
 @app.get("/admin/sam-debug")
 async def admin_sam_debug(noticeid: str, request: Request):
-    """Test SAM API description fetch for a given noticeid."""
+    """Single v2 search call — shows all text fields to diagnose description availability."""
     import httpx
     from src.config import settings
     secret = request.headers.get("X-Admin-Secret", "")
     if not secret or secret != getattr(settings, "admin_secret", None):
         raise HTTPException(status_code=403, detail="Forbidden")
     key = settings.sam_gov_api_key
-    url = f"https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid={noticeid}"
-    results = {}
     async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-        # Test v1 URL with auth
-        try:
-            r = await client.get(url, params={"api_key": key})
-            results["v1_with_auth"] = {"status": r.status_code, "len": len(r.text), "preview": r.text[:200]}
-        except Exception as e:
-            results["v1_with_auth"] = {"error": str(e)}
-        # Test v2 search by noticeid
         try:
             r = await client.get(
                 "https://api.sam.gov/opportunities/v2/search",
                 params={"api_key": key, "noticeid": noticeid, "limit": 1},
             )
+            if r.status_code == 429:
+                return {"error": "quota_exhausted", "retry_after": r.headers.get("Retry-After")}
             data = r.json()
             items = data.get("opportunitiesData") or []
-            desc = ""
-            if items:
-                n = items[0].get("notice") or items[0]
-                desc = n.get("description", "")
-            results["v2_search"] = {"status": r.status_code, "items": len(items), "desc_preview": str(desc)[:200]}
+            if not items:
+                return {"status": r.status_code, "items": 0}
+            n = items[0].get("notice") or items[0]
+            # Return all text-like fields so we can see what has actual content
+            text_fields = {
+                k: str(v)[:300]
+                for k, v in n.items()
+                if isinstance(v, str) and v and k in (
+                    "description", "synopsis", "additionalInfoLink",
+                    "uiLink", "title", "solicitationNumber", "typeOfNotice",
+                )
+            }
+            return {"status": r.status_code, "items": len(items), "text_fields": text_fields}
         except Exception as e:
-            results["v2_search"] = {"error": str(e)}
-    return results
+            return {"error": str(e)}
 
 
 @app.get("/admin/sample-descriptions")
