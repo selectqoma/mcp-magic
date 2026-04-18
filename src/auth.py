@@ -1,5 +1,5 @@
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,6 @@ async def create_user(email: str, session: AsyncSession) -> User:
         email=email,
         api_key=generate_api_key(),
         tier=UserTier.FREE,
-        trial_ends_at=datetime.now(UTC) + timedelta(days=14),
     )
     session.add(user)
     await session.commit()
@@ -34,12 +33,7 @@ async def check_search_limit(user: User, session: AsyncSession) -> tuple[bool, s
     """Returns (allowed, reason). Uses atomic UPDATE to prevent race conditions."""
     now = datetime.now(UTC)
 
-    # Check trial (treat as pro during trial)
-    effective_tier = user.tier
-    if user.trial_ends_at and user.trial_ends_at.replace(tzinfo=UTC) > now and user.tier == UserTier.FREE:
-        effective_tier = UserTier.PRO
-
-    limits = TIER_LIMITS[effective_tier]
+    limits = TIER_LIMITS[user.tier]
     if limits["searches_per_day"] == -1:
         return True, ""
 
@@ -87,12 +81,7 @@ async def check_search_limit(user: User, session: AsyncSession) -> tuple[bool, s
 
 
 def requires_pro(user: User) -> tuple[bool, str]:
-    now = datetime.now(UTC)
-    trial_end = user.trial_ends_at
-    if trial_end and trial_end.tzinfo is None:
-        trial_end = trial_end.replace(tzinfo=UTC)
-    in_trial = trial_end is not None and trial_end > now
-    if user.tier in (UserTier.PRO, UserTier.AGENCY) or in_trial:
+    if user.tier in (UserTier.PRO, UserTier.AGENCY):
         return True, ""
     return False, "This feature requires a Pro subscription. Upgrade at govconmcp.com."
 

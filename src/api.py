@@ -74,16 +74,14 @@ async def register(req: RegisterRequest, request: Request, background_tasks: Bac
 
         user = await create_user(req.email, session)
 
-    trial_str = user.trial_ends_at.strftime("%B %d, %Y") if user.trial_ends_at else None
     # Fire-and-forget: email delivery failure should not fail the registration
-    background_tasks.add_task(send_welcome, user.email, user.api_key, trial_str)
+    background_tasks.add_task(send_welcome, user.email, user.api_key, None)
 
     return {
         "api_key": user.api_key,
         "tier": user.tier,
-        "trial_ends_at": user.trial_ends_at.isoformat() if user.trial_ends_at else None,
         "message": (
-            "Welcome! Your free account includes 5 searches/day and a 14-day Pro trial. "
+            "Welcome! Your free account includes 5 searches/day. "
             "Add this key to your MCP config to get started."
         ),
         "mcp_config": {
@@ -301,7 +299,7 @@ async def mcp_server_card():
         "categories": ["business", "government", "search", "data"],
         "pricing": {
             "model": "freemium",
-            "free": "20 searches/day + 14-day Pro trial",
+            "free": "5 searches/day, no credit card",
             "pro": "$49/mo — unlimited searches, PDF parsing, profile matching, competitor intel",
             "agency": "$199/mo — everything in Pro plus 20 profiles and webhook alerts",
         },
