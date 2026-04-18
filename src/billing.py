@@ -145,18 +145,31 @@ async def _on_subscription_past_due(data: dict, session: AsyncSession) -> None:
 
 
 async def _find_user_by_paddle_customer_id(data: dict, session: AsyncSession) -> User | None:
-    """Look up user ONLY by paddle_customer_id — never by email from webhook payload."""
+    """Look up user by paddle_customer_id, falling back to custom_data.user_id for new subscribers."""
     customer_id = data.get("customer_id")
-    if not customer_id:
-        logger.error(f"Paddle event has no customer_id: {data.get('id', 'unknown')}")
-        return None
-    result = await session.execute(
-        select(User).where(User.paddle_customer_id == customer_id)
-    )
-    user = result.scalar_one_or_none()
-    if not user:
-        logger.error(f"No user found for paddle_customer_id={customer_id}")
-    return user
+
+    # Primary: existing link
+    if customer_id:
+        result = await session.execute(
+            select(User).where(User.paddle_customer_id == customer_id)
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            return user
+
+    # Fallback: custom_data.user_id set at checkout creation (first subscription)
+    user_id = (data.get("custom_data") or {}).get("user_id")
+    if user_id:
+        result = await session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user:
+            if customer_id:
+                user.paddle_customer_id = customer_id  # link for future lookups
+                await session.commit()
+            return user
+
+    logger.error(f"No user found for customer_id={customer_id}, custom_data={data.get('custom_data')}")
+    return None
 
 
 async def link_paddle_customer(user_id, customer_id: str, session: AsyncSession) -> None:

@@ -243,7 +243,7 @@
         <li>3 saved company profiles</li>
         <li>Auto-matched notifications</li>
       </ul>
-      <a href="#" class="pricing-btn pricing-btn-fill" onclick="openModal()">Get Started</a>
+      <a href="#" class="pricing-btn pricing-btn-fill" onclick="openUpgradeModal('pro')">Upgrade to Pro</a>
     </div>
     <div class="pricing-card">
       <div class="plan">Agency</div>
@@ -257,7 +257,7 @@
         <li class="dim">&nbsp;</li>
         <li class="dim">&nbsp;</li>
       </ul>
-      <a href="#" class="pricing-btn pricing-btn-outline" onclick="openModal()">Get Started</a>
+      <a href="#" class="pricing-btn pricing-btn-outline" onclick="openUpgradeModal('agency')">Upgrade to Agency</a>
     </div>
   </div>
 </section>
@@ -284,9 +284,46 @@
   </div>
 </div>
 
+<!-- Upgrade modal -->
+<div class="modal-overlay" id="upgrade-modal" onclick="closeUpgradeModal(event)">
+  <div class="modal">
+    <button class="close" onclick="document.getElementById('upgrade-modal').classList.remove('open')">✕</button>
+    <h3 id="upgrade-title">Upgrade to Pro</h3>
+    <p style="color:var(--muted);font-size:.9rem;margin-bottom:1.25rem;">Enter your API key to continue to checkout.</p>
+    <input type="text" id="upgrade-api-key" placeholder="Your API key" style="font-family:monospace" />
+    <button class="submit" id="upgrade-btn" onclick="startCheckout()">Continue to Checkout →</button>
+    <div class="result-box" id="upgrade-result"></div>
+  </div>
+</div>
+
 <script>
 function openModal() { document.getElementById('modal').classList.add('open'); }
 function closeModal(e) { if (e.target.id === 'modal') document.getElementById('modal').classList.remove('open'); }
+
+let _upgradePlan = 'pro';
+function openUpgradeModal(plan) {
+  _upgradePlan = plan;
+  document.getElementById('upgrade-title').textContent = plan === 'agency' ? 'Upgrade to Agency' : 'Upgrade to Pro';
+  document.getElementById('upgrade-result').style.display = 'none';
+  document.getElementById('upgrade-modal').classList.add('open');
+}
+function closeUpgradeModal(e) { if (e.target.id === 'upgrade-modal') document.getElementById('upgrade-modal').classList.remove('open'); }
+
+async function startCheckout() {
+  const apiKey = document.getElementById('upgrade-api-key').value.trim();
+  if (!apiKey) return;
+  const btn = document.getElementById('upgrade-btn');
+  btn.textContent = 'Redirecting...';
+  btn.disabled = true;
+  try {
+    window.location.href = `/checkout/${_upgradePlan}?api_key=${encodeURIComponent(apiKey)}`;
+  } catch(e) {
+    document.getElementById('upgrade-result').style.display = 'block';
+    document.getElementById('upgrade-result').textContent = 'Error: ' + e.message;
+    btn.textContent = 'Continue to Checkout →';
+    btn.disabled = false;
+  }
+}
 
 async function register() {
   const email = document.getElementById('email-input').value.trim();

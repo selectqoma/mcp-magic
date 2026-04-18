@@ -6,12 +6,14 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr
 
-from src.auth import create_user
+from src.auth import create_user, get_user_by_api_key
 from src.billing import handle_paddle_webhook, verify_paddle_webhook
+from src.config import settings
 from src.db import AsyncSessionLocal
 from src.email import send_resend_api_key, send_welcome
 from src.models.user import User
@@ -149,6 +151,44 @@ async def paddle_webhook(request: Request):
         await handle_paddle_webhook(event_type, data, session)
 
     return Response(status_code=200)
+
+
+# ── Paddle checkout ────────────────────────────────────────────────────────────
+
+@app.get("/checkout/{plan}")
+async def create_checkout(plan: str, api_key: str, request: Request):
+    """Create a Paddle checkout for plan=pro|agency. Redirects to Paddle hosted page."""
+    if plan not in ("pro", "agency"):
+        raise HTTPException(status_code=400, detail="Invalid plan. Use 'pro' or 'agency'.")
+
+    async with AsyncSessionLocal() as session:
+        user = await get_user_by_api_key(api_key, session)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid API key.")
+
+    price_id = settings.paddle_price_id_pro if plan == "pro" else settings.paddle_price_id_agency
+    if not price_id or not settings.paddle_api_key:
+        raise HTTPException(status_code=503, detail="Billing not configured.")
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            "https://api.paddle.com/transactions",
+            headers={"Authorization": f"Bearer {settings.paddle_api_key}"},
+            json={
+                "items": [{"price_id": price_id, "quantity": 1}],
+                "custom_data": {"user_id": str(user.id)},
+                "customer": {"email": user.email},
+                "checkout": {"url": str(request.base_url)},
+            },
+        )
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=502, detail="Failed to create checkout session.")
+
+    checkout_url = resp.json().get("data", {}).get("checkout", {}).get("url")
+    if not checkout_url:
+        raise HTTPException(status_code=502, detail="No checkout URL returned.")
+
+    return RedirectResponse(url=checkout_url, status_code=303)
 
 
 # ── Admin: trigger backfill ────────────────────────────────────────────────────
